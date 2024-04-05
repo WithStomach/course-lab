@@ -1,0 +1,183 @@
+// lalrpop 里的约定
+grammar;
+use crate::ir_gen::ast::*;
+use std::collections::HashMap;
+
+// 约束 lexer 的行为
+match {
+  // 跳过空白符和注释
+  r"\s*" => {},
+  r"//[^\n\r]*[\n\r]*" => {},
+  r"/\*[\s\S]*\*/" => {},
+  // 剩下的情况采用默认方式处理
+  _
+}
+
+// 定义 CompUnit, 其返回值类型为 String
+// parser 在解析完成后的行为是返回 FuncDef 的值
+pub CompUnit: CompUnit = <func_def: FuncDef> => CompUnit{ <> };
+
+// 同上, 不解释
+FuncDef: FuncDef = {
+  <func_type: ItemType> <id: Ident> "(" ")" <block: Block> => {
+    FuncDef{ <> }
+  }
+}
+
+ItemType: ItemType = {
+  "int" => ItemType::Int,
+  "double" => ItemType::Double,
+}
+
+Block: Block = "{" <items: BlockItem*> "}" => Block{ 
+  items: items,
+  vars_table: HashMap::new(),
+};
+
+BlockItem: BlockItem = {
+  <decl: Decl> => BlockItem::Decl(decl),
+  <stmt: Stmt> => BlockItem::Stmt(stmt),
+}
+
+Decl: Decl = {
+  <const_decl: ConstDecl> => Decl::ConstDecl(const_decl),
+  <var_decl: VarDecl> => Decl::VarDecl(var_decl),
+}
+
+VarDecl: VarDecl = {
+  <b_type: ItemType> <var_def: VarDef> <mut var_defs: ("," <VarDef>)*> ";" => {
+    var_defs.insert(0, var_def);
+    VarDecl{
+      b_type: b_type,
+      var_defs: var_defs,
+    }
+  }
+}
+
+ConstDecl: ConstDecl = {
+  "const" <b_type: ItemType> <const_def: ConstDef> <mut const_defs: ("," <ConstDef>)*> ";" => {
+    const_defs.insert(0, const_def);
+    ConstDecl{
+      b_type: b_type, 
+      const_defs: const_defs,
+    }
+  }
+}
+
+VarDef: VarDef = {
+  <ident: Ident> => VarDef::Decl(ident),
+  <ident: Ident> "=" <init_val: InitVal> => VarDef::Def((ident, init_val)),
+}
+
+ConstDef: ConstDef = <ident: Ident> "=" <const_init_val: ConstInitVal> => ConstDef{ <> };
+
+ConstInitVal: ConstInitVal = <const_exp: ConstExp> => ConstInitVal{ <> };
+
+InitVal: InitVal = <exp: Exp> => InitVal{ <> };
+
+Stmt: Stmt = {
+  "return" <exp: Exp> ";" => Stmt::Return(exp),
+  <lval: LVal> "=" <exp: Exp> ";" => Stmt::Assign((lval, exp)),
+}
+
+Exp: Exp = <lor_exp: LOrExp> => Exp{lor_exp: Box::new(lor_exp)};
+
+PrimaryExp: PrimaryExp = {
+  "(" <exp: Exp> ")" => PrimaryExp::Exp(Box::new(exp)),
+  <num: Number> => PrimaryExp::Number(num),
+  <lval: LVal> => PrimaryExp::LVal(lval),
+}
+
+ConstExp: ConstExp = <exp: Exp> => ConstExp{exp: Box::new(exp)};
+
+UnaryExp: UnaryExp = {
+  <primary_exp: PrimaryExp> => UnaryExp::PrimaryExp(Box::new(primary_exp)),
+  <unary_op: UnaryOp> <unary_exp: UnaryExp> => UnaryExp::UnaryExp((unary_op, Box::new(unary_exp))),
+}
+
+UnaryOp: UnaryOp = {
+  "+" => UnaryOp::Passive,
+  "-" => UnaryOp::Negative,
+  "!" => UnaryOp::Inversion,
+}
+
+MulExp: MulExp = {
+  <unary_exp: UnaryExp> => MulExp::UnaryExp(Box::new(unary_exp)),
+  <mul_exp: MulExp> <mul_op: MulOp> <unary_exp: UnaryExp> => MulExp::MulExp(
+      (Box::new(mul_exp), mul_op, Box::new(unary_exp))
+    ),
+}
+
+AddExp: AddExp = {
+  <mul_exp: MulExp> => AddExp::MulExp(Box::new(mul_exp)),
+  <add_exp: AddExp> <add_op: AddOp> <mul_exp: MulExp> => AddExp::AddExp(
+    (Box::new(add_exp), add_op, Box::new(mul_exp))
+  ),
+}
+
+AddOp: AddOp = {
+  "+" => AddOp::Add,
+  "-" => AddOp::Sub,
+}
+
+MulOp: MulOp = {
+  "*" => MulOp::Multiple,
+  "/" => MulOp::Divide,
+  "%" => MulOp::Mod,
+}
+
+LOrExp: LOrExp = {
+  <land_exp: LAndExp> => LOrExp::LAndExp(Box::new(land_exp)),
+  <lor_exp: LOrExp> "||" <land_exp: LAndExp> => LOrExp::LOrExp(
+    (Box::new(lor_exp), Box::new(land_exp))
+  ),
+}
+
+LAndExp: LAndExp = {
+  <eq_exp: EqExp> => LAndExp::EqExp(Box::new(eq_exp)),
+  <land_exp: LAndExp> "&&" <eq_exp: EqExp> => LAndExp::LAndExp(
+    (Box::new(land_exp), Box::new(eq_exp))
+  ),
+}
+
+EqExp: EqExp = {
+  <rel_exp: RelExp> => EqExp::RelExp(Box::new(rel_exp)),
+  <eq_exp: EqExp> <cmp_op: EqOp> <rel_exp: RelExp> => EqExp::EqExp(
+    (Box::new(eq_exp), cmp_op, Box::new(rel_exp))
+  ),
+}
+
+RelExp: RelExp = {
+  <add_exp: AddExp> => RelExp::AddExp(Box::new(add_exp)),
+  <rel_exp: RelExp> <cmp_op: CmpOp> <add_exp: AddExp> => RelExp::CompExp(
+    (Box::new(rel_exp), cmp_op, Box::new(add_exp))
+  ),
+}
+
+EqOp: CmpOp = {
+  "==" => CmpOp::Eq,
+  "!=" => CmpOp::NEq,
+}
+
+CmpOp: CmpOp = {
+  "<" => CmpOp::Less,
+  ">" => CmpOp::Grate,
+  "<=" => CmpOp::LessEq,
+  ">=" => CmpOp::GrateEq,
+}
+
+Number: i32 = <num: IntConst> => <>;
+
+// 如果匹配到标识符, 就返回这个字符串
+// 一对尖括号在此处指代的是正则表达式匹配到的字符串 (&str)
+// 关于尖括号到底代表什么, 请 RTFM
+Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
+
+LVal: String = <ident: Ident> => <>;
+
+// 对整数字面量的处理方式: 把匹配到的字符串按对应进制转换成数字
+IntConst: i32 = {
+  r"[1-9][0-9]*" => i32::from_str_radix(<>, 10).unwrap(),
+  r"0[0-7]*" => i32::from_str_radix(<>, 8).unwrap(),
+  r"0[xX][0-9a-fA-F]+" => i32::from_str_radix(&<>[2..], 16).unwrap(),
+}

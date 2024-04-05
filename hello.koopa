@@ -1,0 +1,6 @@
+fun @test(): i32{
+%entry:
+    @a = alloc i32
+    %0 = load @a
+    ret %0
+}
