@@ -1,6 +1,19 @@
+// adfdas//
 
-int test()
+
+/*//*/
+/*fdjaklfdjasklfdjs
+
+///
+
+
+
+
+
+*/
+int main()
 {
-    int a;
-    return a;
+    ///fdafjdajfkdlajf
+    return // /* f fdsaf*/
+    0;
 }
