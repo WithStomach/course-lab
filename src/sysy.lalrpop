@@ -76,8 +76,10 @@ ConstInitVal: ConstInitVal = <const_exp: ConstExp> => ConstInitVal{ <> };
 InitVal: InitVal = <exp: Exp> => InitVal{ <> };
 
 Stmt: Stmt = {
-  "return" <exp: Exp> ";" => Stmt::Return(exp),
+  "return" <exp: (Exp)?> ";" => Stmt::Return(exp),
   <lval: LVal> "=" <exp: Exp> ";" => Stmt::Assign((lval, exp)),
+  <exp: (Exp)?> ";" => Stmt::Exp(exp),
+  <block: Block> => Stmt::Block(block),
 }
 
 Exp: Exp = <lor_exp: LOrExp> => Exp{lor_exp: Box::new(lor_exp)};

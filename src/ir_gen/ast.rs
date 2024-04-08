@@ -91,11 +91,15 @@ pub struct ConstInitVal {
 }
 
 /// Stmt ::= LVal "=" Exp ";"
-///       | "return" Exp ";"
+///       | "return" Exp? ";"
+///       | Exp? ";"
+///       | Block
 #[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
-    Return(Exp),
+    Return(Option<Exp>),
     Assign((String, Exp)),
+    Exp(Option<Exp>),
+    Block(Block),
 }
 
 /// Exp ::= LOrExp

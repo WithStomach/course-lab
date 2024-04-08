@@ -9,6 +9,7 @@ impl CompUnit {
         let mut compiler_info = CompilerInfo {
             temp_id: 0,
             vars_table: HashMap::new(),
+            field_depth: 0,
         };
         self.show(&mut compiler_info).0
     }
@@ -17,7 +18,8 @@ impl CompUnit {
 #[derive(Debug, PartialEq, Clone)]
 struct CompilerInfo {
     pub temp_id: i32,
-    pub vars_table: HashMap<String, Variable>,
+    pub vars_table: HashMap<String, (Variable, i32)>,
+    pub field_depth: i32,
 }
 
 enum Res {
@@ -49,8 +51,10 @@ impl Show for FuncDef {
                 s += "double";
             }
         }
-        s += "{\n";
-        s += &self.block.show(info).0;
+        s += "{\n%entry:\n";
+        let mut next_info = info.clone();
+        next_info.field_depth += 1;
+        s += &self.block.show(&mut next_info).0;
         s += "}\n";
         (s, Res::Nothing)
     }
@@ -58,10 +62,9 @@ impl Show for FuncDef {
 
 impl Show for Block {
     fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
-        let mut s = "%entry:\n".to_string();
-        let mut block_info = info.clone();
+        let mut s = "".to_string();
         for item in &self.items {
-            s += &item.show(&mut block_info).0;
+            s += &item.show(info).0;
         }
         (s, Res::Nothing)
     }
@@ -121,16 +124,34 @@ impl Show for ConstDecl {
 
 impl Show for ConstDef {
     fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
+        let mut calculate_info = info
+            .clone()
+            .vars_table
+            .into_iter()
+            .map(|(k, (v, _))| (k, v))
+            .collect();
         // 在变量表中寻找是否该变量已经被定义
-        match info.vars_table.get(&self.ident) {
+        match info.vars_table.get_mut(&self.ident) {
             // 若未被定义，将其添加进变量表中
             None => {
-                let value = self.const_init_val.calculate(&mut info.vars_table);
-                info.vars_table
-                    .insert(self.ident.clone(), Variable::ConstINT(value));
+                let value = self.const_init_val.calculate(&mut calculate_info);
+                info.vars_table.insert(
+                    self.ident.clone(),
+                    (Variable::ConstINT(value), info.field_depth),
+                );
             }
-            // 否则，重复定义常量，报错
-            Some(value) => unreachable!(),
+            // 否则，判断已定义的变量是否跟当前处于同一作用域
+            Some(value) => {
+                if value.1 == info.field_depth {
+                    // 若处于同一作用域，属于重复定义
+                    panic!("变量{:?}重复定义！\n", self.ident);
+                } else {
+                    // 否则覆盖定义
+                    let new_value = self.const_init_val.calculate(&mut calculate_info);
+                    // 更新变量表
+                    *value = (Variable::ConstINT(new_value), info.field_depth);
+                }
+            }
         }
         ("".to_string(), Res::Nothing)
     }
@@ -142,45 +163,96 @@ impl Show for VarDef {
         match self {
             VarDef::Def((ident, init_val)) => {
                 // 首先检查该变量是否已被定义。
-                match info.vars_table.get(ident) {
-                    // 若已被定义，属于重复定义，报错
-                    Some(int) => unreachable!(),
+                match info.vars_table.get_mut(ident) {
+                    // 若已被定义，检查作用域
+                    Some(int) => {
+                        if int.1 == info.field_depth {
+                            // 若处于同一作用域，属于重复定义
+                            panic!("变量{:?}重复定义！\n", ident);
+                        } else {
+                            // 生成该变量对应的指针的名字：@ident_depth
+                            let var = Variable::INT(format!("@{0}_{1}", ident, info.field_depth));
+                            // 修改变量表
+                            *int = (var, info.field_depth);
+                            // 为该变量进行alloc操作
+                            s += &format!("    @{0}_{1} = alloc i32\n", ident, info.field_depth);
+                            // 计算init_val
+                            let (init_s, init_res) = init_val.show(info);
+                            // 将结果存进内存
+                            match init_res {
+                                Res::Nothing => unreachable!(),
+                                Res::Imm => {
+                                    s += &format!(
+                                        "    store {0}, @{1}_{2}\n",
+                                        init_s, ident, info.field_depth
+                                    );
+                                }
+                                Res::Temp(idx) => {
+                                    s += &init_s;
+                                    s += &format!(
+                                        "    store %{0}, @{1}_{2}\n",
+                                        idx, ident, info.field_depth
+                                    );
+                                }
+                            }
+                        }
+                    }
                     // 若尚未被定义，将其加入变量表
                     None => {
-                        // 生成该变量对应的指针的名字：@ident
-                        let var = Variable::INT(format!("@{0}", ident));
+                        // 生成该变量对应的指针的名字：@ident_depth
+                        let var = Variable::INT(format!("@{0}_{1}", ident, info.field_depth));
                         // 将其插入变量表中
-                        info.vars_table.insert(ident.clone(), var);
+                        info.vars_table
+                            .insert(ident.clone(), (var, info.field_depth));
                         // 为该变量进行alloc操作
-                        s += &format!("    @{0} = alloc i32\n", ident);
+                        s += &format!("    @{0}_{1} = alloc i32\n", ident, info.field_depth);
                         // 计算init_val
                         let (init_s, init_res) = init_val.show(info);
                         // 将结果存进内存
                         match init_res {
                             Res::Nothing => unreachable!(),
                             Res::Imm => {
-                                s += &format!("    store {0}, @{1}\n", init_s, ident);
+                                s += &format!(
+                                    "    store {0}, @{1}_{2}\n",
+                                    init_s, ident, info.field_depth
+                                );
                             }
                             Res::Temp(idx) => {
                                 s += &init_s;
-                                s += &format!("    store %{0}, @{1}\n", idx, ident);
+                                s += &format!(
+                                    "    store %{0}, @{1}_{2}\n",
+                                    idx, ident, info.field_depth
+                                );
                             }
                         }
                     }
                 }
             }
             VarDef::Decl(ident) => {
-                match info.vars_table.get(ident) {
-                    // 若已被定义，属于重复定义，报错
-                    Some(int) => unreachable!(),
+                match info.vars_table.get_mut(ident) {
+                    // 若已被定义，检查作用域
+                    Some(int) => {
+                        if int.1 == info.field_depth {
+                            // 若处于同一作用域，属于重复定义
+                            panic!("变量{:?}重复定义！\n", ident);
+                        } else {
+                            // 生成该变量对应的指针的名字：@ident_depth
+                            let var = Variable::INT(format!("@{0}_{1}", ident, info.field_depth));
+                            // 将其插入变量表中
+                            *int = (var, info.field_depth);
+                            // 为该变量进行alloc操作
+                            s += &format!("    @{0}_{1} = alloc i32\n", ident, info.field_depth);
+                        }
+                    }
                     // 若尚未被定义，将其加入变量表
                     None => {
-                        // 生成该变量对应的指针的名字：@ident
-                        let var = Variable::INT(format!("@{0}", ident));
+                        // 生成该变量对应的指针的名字：@ident_depth
+                        let var = Variable::INT(format!("@{0}_{1}", ident, info.field_depth));
                         // 将其插入变量表中
-                        info.vars_table.insert(ident.clone(), var);
+                        info.vars_table
+                            .insert(ident.clone(), (var, info.field_depth));
                         // 为该变量进行alloc操作
-                        s += &format!("    @{0} = alloc i32\n", ident);
+                        s += &format!("    @{0}_{1} = alloc i32\n", ident, info.field_depth);
                     }
                 }
             }
@@ -201,15 +273,22 @@ impl Show for Stmt {
         match self {
             // 对于返回语句，计算返回值并ret即可
             Stmt::Return(exp) => {
-                let (sub_exp_str, sub_res) = exp.show(info);
-                match sub_res {
-                    Res::Nothing => {}
-                    Res::Imm => {
-                        s += &format!("    ret {}\n", sub_exp_str);
+                match exp {
+                    None => {
+                        s += "    ret\n";
                     }
-                    Res::Temp(id) => {
-                        s += &sub_exp_str;
-                        s += &format!("    ret %{}\n", id);
+                    Some(e) => {
+                        let (sub_exp_str, sub_res) = e.show(info);
+                        match sub_res {
+                            Res::Nothing => {}
+                            Res::Imm => {
+                                s += &format!("    ret {}\n", sub_exp_str);
+                            }
+                            Res::Temp(id) => {
+                                s += &sub_exp_str;
+                                s += &format!("    ret %{}\n", id);
+                            }
+                        }
                     }
                 }
                 (s, Res::Nothing)
@@ -220,7 +299,7 @@ impl Show for Stmt {
                 match info.clone().vars_table.get(lval) {
                     Some(var) => {
                         // 检查赋值语句左侧是否是常量
-                        match var {
+                        match &var.0 {
                             // 若是常量，报错
                             Variable::ConstINT(_) => unreachable!(),
                             Variable::INT(ptr_name) => {
@@ -241,6 +320,22 @@ impl Show for Stmt {
                     }
                     // 若变量未被定义过，报错
                     None => unreachable!(),
+                }
+                (s, Res::Nothing)
+            }
+            Stmt::Block(block) => {
+                let mut next_info = info.clone();
+                next_info.field_depth += 1;
+                s += &block.show(&mut next_info).0;
+                info.temp_id = next_info.temp_id;
+                (s, Res::Nothing)
+            }
+            Stmt::Exp(exp) => {
+                match exp {
+                    None => {}
+                    Some(e) => {
+                        s += &e.show(info).0;
+                    }
                 }
                 (s, Res::Nothing)
             }
@@ -327,9 +422,9 @@ impl Show for PrimaryExp {
                 s += &num.to_string();
                 res = Res::Imm;
             }
-            PrimaryExp::LVal(var) => match info.vars_table.get(var) {
+            PrimaryExp::LVal(var) => match info.vars_table.get_mut(var) {
                 Some(const_val) => {
-                    match const_val {
+                    match &const_val.0 {
                         // 对于常量，直接将值代入即可
                         Variable::ConstINT(const_int) => {
                             s += &const_int.to_string();
