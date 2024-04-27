@@ -1,5 +1,5 @@
-    .text
-    .global main
+	.text
+	.global main
 main:
 	addi sp, sp, -80
 	li t5, 1
@@ -25,6 +25,6 @@ main:
                             	add t5, t5, t6
 
                             	sw t5, 16(sp)
-    mv a0, 16(sp)
+	lw a0, 16(sp)
 	addi sp, sp, 80
 	ret

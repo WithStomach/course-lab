@@ -34,10 +34,10 @@ impl GenerateAsm for koopa::ir::Program {
         value_reg_map: &mut HashMap<Value, i32>,
     ) -> (String, Res) {
         let mut s = "".to_string();
-        s += "    .text\n";
+        s += "\t.text\n";
         for &func in self.func_layout() {
             let func_data = self.func(func);
-            s += "    .global ";
+            s += "\t.global ";
             s += &func_data.name()[1..];
             s += "\n";
         }
@@ -108,16 +108,16 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         match ret_res {
                             Res::Nothing => {}
                             Res::Imm => {
-                                s += &format!("    li a0, {0}\n", ret_str);
+                                s += &format!("\tli a0, {0}\n", ret_str);
                             }
                             Res::Register(idx) => {
-                                s += &format!("    mv a0, {0}\n", get_register_name(&idx));
+                                s += &format!("\tlw a0, {0}\n", get_register_name(&idx));
                             }
                             _ => {}
                         }
                     }
                     Some(idx) => {
-                        s += &format!("    mv a0, {0}\n", get_register_name(&idx));
+                        s += &format!("\tlw a0, {0}\n", get_register_name(&idx));
                     }
                 }
                 res = Res::Return(0);
