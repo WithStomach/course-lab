@@ -19,7 +19,6 @@ fn main() -> Result<()> {
     let output = args.next().unwrap();
 
     let input = read_to_string(input)?;
-
     let ast = sysy::CompUnitParser::new().parse(&input).unwrap();
     let mut file = File::create(output)?;
     let koopa_str = ast.generate_koopa();

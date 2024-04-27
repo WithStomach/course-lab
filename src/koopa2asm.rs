@@ -11,7 +11,7 @@ fn get_register_name(register_id: &i32) -> String {
     if *register_id <= 6 {
         format!("t{0}", register_id)
     } else {
-        format!("a{0}", register_id - 6)
+        format!("a{0}", register_id - 7)
     }
 }
 
