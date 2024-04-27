@@ -1,11 +1,4 @@
-    .text
-    .global main
-main:
-    li t0, 1
-    li t1, 2
-    slt t0, t0, t1
-    xor t1, t0, t1
-    seqz t1, t1
-    or t0, t0, t1
-    mv a0, t0
-    ret
+fun @main(): i32{
+%entry:
+    ret 1
+}

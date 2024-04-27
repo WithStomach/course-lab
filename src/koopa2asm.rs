@@ -5,6 +5,7 @@ enum Res {
     Nothing,
     Imm,
     Register(i32),
+    Return,
 }
 
 fn get_register_name(register_id: &i32) -> String {
@@ -69,6 +70,10 @@ impl GenerateAsm for koopa::ir::FunctionData {
                     Res::Register(idx) => {
                         value_reg_map.insert(inst, idx);
                     }
+                    Res::Return => {
+                        println!("!!!");
+                        break;
+                    }
                 }
             }
         }
@@ -105,6 +110,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                             Res::Register(idx) => {
                                 s += &format!("    mv a0, {0}\n", get_register_name(&idx));
                             }
+                            _ => {}
                         }
                     }
                     Some(idx) => {
@@ -113,6 +119,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 }
 
                 s += "    ret\n";
+                res = Res::Return;
             }
             ValueKind::Binary(exp) => {
                 let op = exp.op();
@@ -147,6 +154,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                                 s += &lhs_str;
                                 lhs_reg = id;
                             }
+                            _ => {}
                         }
                     }
                     Some(idx) => {
@@ -176,6 +184,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                                 s += &rhs_str;
                                 rhs_reg = id;
                             }
+                            _ => {}
                         }
                     }
                     Some(idx) => {

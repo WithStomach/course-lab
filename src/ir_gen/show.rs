@@ -26,6 +26,7 @@ enum Res {
     Nothing,
     Imm,
     Temp(i32),
+    Ret,
 }
 
 trait Show {
@@ -63,8 +64,17 @@ impl Show for FuncDef {
 impl Show for Block {
     fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
         let mut s = "".to_string();
+        let mut ds = "".to_string();
+        let mut res = Res::Nothing;
         for item in &self.items {
-            s += &item.show(info).0;
+            (ds, res) = item.show(info);
+            s += &ds;
+            match res {
+                Res::Ret => {
+                    break;
+                }
+                _ => {}
+            }
         }
         (s, Res::Nothing)
     }
@@ -73,15 +83,16 @@ impl Show for Block {
 impl Show for BlockItem {
     fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
         let mut s = "".to_string();
+        let mut res = Res::Nothing;
         match self {
             BlockItem::Decl(decl) => {
                 s += &*decl.show(info).0;
             }
             BlockItem::Stmt(stmt) => {
-                s += &*stmt.show(info).0;
+                (s, res) = stmt.show(info);
             }
         }
-        (s, Res::Nothing)
+        (s, res)
     }
 }
 
@@ -194,6 +205,7 @@ impl Show for VarDef {
                                         idx, ident, info.field_depth
                                     );
                                 }
+                                _ => {}
                             }
                         }
                     }
@@ -224,6 +236,7 @@ impl Show for VarDef {
                                     idx, ident, info.field_depth
                                 );
                             }
+                            _ => {}
                         }
                     }
                 }
@@ -288,10 +301,11 @@ impl Show for Stmt {
                                 s += &sub_exp_str;
                                 s += &format!("    ret %{}\n", id);
                             }
+                            _ => {}
                         }
                     }
                 }
-                (s, Res::Nothing)
+                (s, Res::Ret)
             }
 
             Stmt::Assign((lval, exp)) => {
@@ -314,6 +328,7 @@ impl Show for Stmt {
                                         s += &format!("    store %{0}, {1}\n", idx, ptr_name);
                                     }
                                     Res::Nothing => unreachable!(),
+                                    _ => {}
                                 }
                             }
                         }
@@ -383,6 +398,7 @@ impl Show for UnaryExp {
                                 res = Res::Temp(info.temp_id);
                                 info.temp_id += 1;
                             }
+                            _ => {}
                         }
                     }
                     UnaryOp::Inversion => {
@@ -399,6 +415,7 @@ impl Show for UnaryExp {
                                 res = Res::Temp(info.temp_id);
                                 info.temp_id += 1;
                             }
+                            _ => {}
                         }
                     }
                 }
@@ -465,6 +482,7 @@ impl Show for AddExp {
                         op1 = format!("%{}", id);
                         s += &add_exp_str;
                     }
+                    _ => {}
                 }
                 // 获取第一个操作数的字符串表示
                 let mut op2 = "".to_string();
@@ -477,6 +495,7 @@ impl Show for AddExp {
                         op2 = format!("%{}", id);
                         s += &mul_exp_str;
                     }
+                    _ => {}
                 }
                 // 按照不同运算符生成运算表达式
                 match add_op {
@@ -526,6 +545,7 @@ impl Show for MulExp {
                         op1 = format!("%{}", id);
                         s += &mul_exp_str;
                     }
+                    _ => {}
                 }
                 // 获取第一个操作数的字符串表示
                 let mut op2 = "".to_string();
@@ -538,6 +558,7 @@ impl Show for MulExp {
                         op2 = format!("%{}", id);
                         s += &unary_exp_str;
                     }
+                    _ => {}
                 }
                 // 按照不同运算符生成运算表达式
                 match mul_op {
@@ -587,6 +608,7 @@ impl Show for LOrExp {
                         op1 = format!("%{}", id);
                         s += &lor_exp_str;
                     }
+                    _ => {}
                 }
                 // 获取第一个操作数的字符串表示
                 let mut op2 = "".to_string();
@@ -599,6 +621,7 @@ impl Show for LOrExp {
                         op2 = format!("%{}", id);
                         s += &land_exp_str;
                     }
+                    _ => {}
                 }
                 s += &format!("    %{0} = or {1}, {2}\n", info.temp_id, op1, op2);
                 s += &format!(
@@ -639,6 +662,7 @@ impl Show for LAndExp {
                         op1 = format!("%{}", id);
                         s += &land_exp_str;
                     }
+                    _ => {}
                 }
                 // 获取第一个操作数的字符串表示
                 let mut op2 = "".to_string();
@@ -651,6 +675,7 @@ impl Show for LAndExp {
                         op2 = format!("%{}", id);
                         s += &eq_exp_str;
                     }
+                    _ => {}
                 }
                 s += &format!("    %{0} = ne {1}, {2}\n", info.temp_id, op1, 0);
                 s += &format!("    %{0} = ne {1}, {2}\n", info.temp_id + 1, op2, 0);
@@ -692,6 +717,7 @@ impl Show for EqExp {
                         op1 = format!("%{}", id);
                         s += &eq_exp_str;
                     }
+                    _ => {}
                 }
                 // 获取第一个操作数的字符串表示
                 let mut op2 = "".to_string();
@@ -704,6 +730,7 @@ impl Show for EqExp {
                         op2 = format!("%{}", id);
                         s += &rel_exp_str;
                     }
+                    _ => {}
                 }
 
                 let mut op = "".to_string();
@@ -745,6 +772,7 @@ impl Show for RelExp {
                         op1 = format!("%{}", id);
                         s += &rel_exp_str;
                     }
+                    _ => {}
                 }
                 // 获取第一个操作数的字符串表示
                 let mut op2 = "".to_string();
@@ -757,6 +785,7 @@ impl Show for RelExp {
                         op2 = format!("%{}", id);
                         s += &add_exp_str;
                     }
+                    _ => {}
                 }
 
                 let mut op = "".to_string();
