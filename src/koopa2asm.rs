@@ -342,7 +342,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         // 将两个判断结果作或
                         s += &format!(
                             "\tor t5, t5, a5\n
-                            \tsw t5 {0}",
+                            \tsw t5 {0}\n",
                             get_register_name(&res_reg),
                         );
                     }
@@ -366,7 +366,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         // 将两个判断结果作或
                         s += &format!(
                             "\tor t5, t5, a5\n
-                            \tsw t5 {0}",
+                            \tsw t5 {0}\n",
                             get_register_name(&res_reg),
                         );
                     }
