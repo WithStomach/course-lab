@@ -5,15 +5,16 @@ enum Res {
     Nothing,
     Imm,
     Register(i32),
-    Return,
+    Return(i32),
 }
 
 fn get_register_name(register_id: &i32) -> String {
-    if *register_id <= 6 {
-        format!("t{0}", register_id)
-    } else {
-        format!("a{0}", register_id - 7)
-    }
+    // if *register_id <= 6 {
+    //     format!("t{0}", register_id)
+    // } else {
+    //     format!("a{0}", register_id - 7)
+    // }
+    format!("{0}(sp)", register_id * 4)
 }
 
 trait GenerateAsm {
@@ -55,9 +56,10 @@ impl GenerateAsm for koopa::ir::FunctionData {
         register_id: &mut i32,
         value_reg_map: &mut HashMap<Value, i32>,
     ) -> (String, Res) {
+        let mut pre_str = "".to_string();
+        pre_str += &self.name()[1..];
+        pre_str += ":\n";
         let mut s = "".to_string();
-        s += &self.name()[1..];
-        s += ":\n";
         for (&_bb, node) in self.layout().bbs() {
             for &inst in node.insts().keys() {
                 let value_data = self.dfg().value(inst);
@@ -70,13 +72,14 @@ impl GenerateAsm for koopa::ir::FunctionData {
                     Res::Register(idx) => {
                         value_reg_map.insert(inst, idx);
                     }
-                    Res::Return => {
-                        println!("!!!");
-                        break;
-                    }
+                    _ => {}
                 }
             }
         }
+        let stack_len = *register_id * 16;
+        pre_str += &format!("\taddi sp, sp, -{0}\n", stack_len);
+        let end_str = format!("\taddi sp, sp, {0}\n\tret\n", stack_len);
+        s = pre_str + &s + &end_str;
         (s, Res::Nothing)
     }
 }
@@ -117,9 +120,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         s += &format!("    mv a0, {0}\n", get_register_name(&idx));
                     }
                 }
-
-                s += "    ret\n";
-                res = Res::Return;
+                res = Res::Return(0);
             }
             ValueKind::Binary(exp) => {
                 let op = exp.op();
@@ -129,8 +130,6 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 let mut lhs_reg = -1;
                 let mut rhs_reg = -1;
                 let mut res_reg = -1;
-                let mut lhs_imm = false;
-                let mut rhs_imm = false;
 
                 match value_reg_map.get(&exp.lhs()) {
                     None => {
@@ -138,16 +137,14 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         match lhs_res {
                             Res::Nothing => {}
                             Res::Imm => {
-                                // 对于立即数，将其放入一个新的临时寄存器中, 且最终结果也可以放入该寄存器中
                                 s += &format!(
-                                    "    li {0}, {1}\n",
+                                    "\tli t5, {0}\n
+                                    \tsw t5, {1}\n",
+                                    lhs_str,
                                     get_register_name(register_id),
-                                    lhs_str
                                 );
                                 lhs_reg = *register_id;
-                                res_reg = *register_id;
                                 *register_id += 1;
-                                lhs_imm = true;
                             }
                             Res::Register(id) => {
                                 // 若左操作数的结果已经存入第id个临时寄存器中，直接使用即可
@@ -169,16 +166,13 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                             Res::Nothing => {}
                             Res::Imm => {
                                 s += &format!(
-                                    "    li {0}, {1}\n",
+                                    "\tli t5, {0}\n
+                                    \tsw t5, {1}\n",
+                                    rhs_str,
                                     get_register_name(register_id),
-                                    rhs_str
                                 );
                                 rhs_reg = *register_id;
-                                if res_reg < 0 {
-                                    res_reg = *register_id;
-                                }
                                 *register_id += 1;
-                                rhs_imm = true;
                             }
                             Res::Register(id) => {
                                 s += &rhs_str;
@@ -192,152 +186,188 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     }
                 }
 
-                if res_reg < 0 {
-                    res_reg = *register_id;
-                    *register_id += 1;
-                }
-
-                // 若左右都存放了立即数，计算完成后存放右侧立即数的寄存器可以释放
-                if lhs_imm && rhs_imm {
-                    *register_id -= 1;
-                }
+                res_reg = *register_id;
+                *register_id += 1;
 
                 // 找出对应操作
                 match op {
                     BinaryOp::Add => {
                         s += &format!(
-                            "    add {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \tadd t5, t5, t6\n
+                            \tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
+                            get_register_name(&res_reg),
                         );
                     }
                     BinaryOp::Sub => {
                         s += &format!(
-                            "    sub {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \tsub t5, t5, t6\n
+                            \tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
+                            get_register_name(&res_reg),
                         );
                     }
                     BinaryOp::Mul => {
                         s += &format!(
-                            "    mul {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \tmul t5, t5, t6\n
+                            \tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
+                            get_register_name(&res_reg),
                         );
                     }
                     BinaryOp::Div => {
                         s += &format!(
-                            "    div {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \tdiv t5, t5, t6\n
+                            \tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
+                            get_register_name(&res_reg),
                         );
                     }
                     BinaryOp::Mod => {
                         s += &format!(
-                            "    rem {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \trem t5, t5, t6\n
+                            \tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
+                            get_register_name(&res_reg),
                         );
                     }
                     BinaryOp::And => {
                         s += &format!(
-                            "    and {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \tand t5, t5, t6\n
+                            \tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
+                            get_register_name(&res_reg),
                         );
                     }
                     BinaryOp::Or => {
                         s += &format!(
-                            "    or {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \tor t5, t5, t6\n
+                            \tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
+                            get_register_name(&res_reg),
                         );
                     }
                     BinaryOp::Eq => {
                         // a == b <==> (a xor b) == 0
                         s += &format!(
-                            "    xor {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \txor t5, t5, t6\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
                         );
-                        s += &format!("    seqz {0}, {0}\n", get_register_name(&res_reg));
+                        s += &format!(
+                            "\tseqz t5, t5\n
+                            \tsw t5, {0}\n",
+                            get_register_name(&res_reg)
+                        );
                     }
                     BinaryOp::NotEq => {
                         // a == b <==> (a xor b) == 0
                         s += &format!(
-                            "    xor {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \txor t5, t5, t6\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
                         );
-                        s += &format!("    snez {0}, {0}\n", get_register_name(&res_reg));
+                        s += &format!(
+                            "\tsnez t5, t5\n
+                            \tsw t5, {0}\n",
+                            get_register_name(&res_reg)
+                        );
                     }
                     BinaryOp::Lt => {
                         s += &format!(
-                            "    slt {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \tslt t5, t5, t6\n
+                            \tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
+                            get_register_name(&res_reg),
                         );
                     }
                     BinaryOp::Gt => {
                         s += &format!(
-                            "    sgt {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \tsgt t5, t5, t6\n
+                            \tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
+                            get_register_name(&res_reg),
                         );
                     }
                     BinaryOp::Le => {
                         // a <= b <==> a - b <= 0
                         // 首先判断是否有 a < b
                         s += &format!(
-                            "    slt {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \tslt t5, t5, t6\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
                         );
                         // 再判断是否 a == b
                         s += &format!(
-                            "    xor {0}, {1}, {2}\n",
-                            get_register_name(register_id),
+                            "\tlw a5, {0}\n
+                            \tlw a6, {1}\n
+                            \txor a5, a5, a6\n
+                            \tseqz a5, a5\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
                         );
-                        s += &format!("    seqz {0}, {0}\n", get_register_name(register_id));
                         // 将两个判断结果作或
                         s += &format!(
-                            "    or {0}, {0}, {1}\n",
+                            "\tor t5, t5, a5\n
+                            \tsw t5 {0}",
                             get_register_name(&res_reg),
-                            get_register_name(register_id)
                         );
                     }
                     BinaryOp::Ge => {
                         s += &format!(
-                            "    sgt {0}, {1}, {2}\n",
-                            get_register_name(&res_reg),
+                            "\tlw t5, {0}\n
+                            \tlw t6, {1}\n
+                            \tsgt t5, t5, t6\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
                         );
+                        // 再判断是否 a == b
                         s += &format!(
-                            "    xor {0}, {1}, {2}\n",
-                            get_register_name(register_id),
+                            "\tlw a5, {0}\n
+                            \tlw a6, {1}\n
+                            \txor a5, a5, a6\n
+                            \tseqz a5, a5\n",
                             get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg)
+                            get_register_name(&rhs_reg),
                         );
-                        s += &format!("    seqz {0}, {0}\n", get_register_name(register_id));
+                        // 将两个判断结果作或
                         s += &format!(
-                            "    or {0}, {0}, {1}\n",
+                            "\tor t5, t5, a5\n
+                            \tsw t5 {0}",
                             get_register_name(&res_reg),
-                            get_register_name(register_id)
                         );
                     }
                     _ => unreachable!(),

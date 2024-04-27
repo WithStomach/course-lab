@@ -1,4 +1,30 @@
-fun @main(): i32{
-%entry:
-    ret 1
-}
+    .text
+    .global main
+main:
+	addi sp, sp, -80
+	li t5, 1
+
+                                    	sw t5, 0(sp)
+	li t5, 2
+
+                                    	sw t5, 4(sp)
+	lw t5, 0(sp)
+
+                            	lw t6, 4(sp)
+
+                            	add t5, t5, t6
+
+                            	sw t5, 8(sp)
+	li t5, 3
+
+                                    	sw t5, 12(sp)
+	lw t5, 8(sp)
+
+                            	lw t6, 12(sp)
+
+                            	add t5, t5, t6
+
+                            	sw t5, 16(sp)
+    mv a0, 16(sp)
+	addi sp, sp, 80
+	ret
