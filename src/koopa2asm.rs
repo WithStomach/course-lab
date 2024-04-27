@@ -79,8 +79,8 @@ impl GenerateAsm for koopa::ir::FunctionData {
         let stack_len = *register_id * 16;
         pre_str += &format!("\taddi sp, sp, -{0}\n", stack_len);
         let end_str = format!("\taddi sp, sp, {0}\n\tret\n", stack_len);
-        s = pre_str + &s + &end_str;
-        (s, Res::Nothing)
+        let ans_s = pre_str + &s + &end_str;
+        (ans_s, Res::Nothing)
     }
 }
 
@@ -326,22 +326,18 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         s += &format!(
                             "\tlw t5, {0}\n
                             \tlw t6, {1}\n
-                            \tslt t5, t5, t6\n",
+                            \tslt t4, t5, t6\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                         );
                         // 再判断是否 a == b
                         s += &format!(
-                            "\tlw a5, {0}\n
-                            \tlw a6, {1}\n
-                            \txor a5, a5, a6\n
-                            \tseqz a5, a5\n",
-                            get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg),
+                            "\txor t3, t5, t6\n
+                            \tseqz t3, t3\n"
                         );
                         // 将两个判断结果作或
                         s += &format!(
-                            "\tor t5, t5, a5\n
+                            "\tor t5, t4, t3\n
                             \tsw t5 {0}\n",
                             get_register_name(&res_reg),
                         );
@@ -350,22 +346,18 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         s += &format!(
                             "\tlw t5, {0}\n
                             \tlw t6, {1}\n
-                            \tsgt t5, t5, t6\n",
+                            \tsgt t4, t5, t6\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                         );
                         // 再判断是否 a == b
                         s += &format!(
-                            "\tlw a5, {0}\n
-                            \tlw a6, {1}\n
-                            \txor a5, a5, a6\n
-                            \tseqz a5, a5\n",
-                            get_register_name(&lhs_reg),
-                            get_register_name(&rhs_reg),
+                            "\txor t3, t5, t6\n
+                            \tseqz t3, t3\n"
                         );
                         // 将两个判断结果作或
                         s += &format!(
-                            "\tor t5, t5, a5\n
+                            "\tor t5, t4, t3\n
                             \tsw t5 {0}\n",
                             get_register_name(&res_reg),
                         );
