@@ -29,6 +29,14 @@ fn main() -> Result<()> {
         let program = driver.generate_program().unwrap();
         let asm_str = koopa2asm(&program);
         let _err = write!(file, "{}", asm_str);
+    } else if mode == "-all" {
+        let _err = write!(file, "{}", koopa_str);
+        let asm_output = args.next().unwrap();
+        file = File::create(asm_output)?;
+        let driver = koopa::front::Driver::from(koopa_str);
+        let program = driver.generate_program().unwrap();
+        let asm_str = koopa2asm(&program);
+        let _err1 = write!(file, "{}", asm_str);
     }
     Ok(())
 }

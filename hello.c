@@ -1,4 +1,6 @@
 int main()
 {
-    return 1 <= 2 + 3;
+    int x = 0;
+    x = x + 10;
+    return x + 1;
 }

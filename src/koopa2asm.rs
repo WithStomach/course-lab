@@ -1,4 +1,4 @@
-use koopa::ir::{dfg::DataFlowGraph, entities::Value, BinaryOp, Program, ValueKind};
+use koopa::ir::{dfg::DataFlowGraph, entities::Value, values::Alloc, BinaryOp, Program, ValueKind};
 use std::collections::HashMap;
 
 enum Res {
@@ -9,11 +9,6 @@ enum Res {
 }
 
 fn get_register_name(register_id: &i32) -> String {
-    // if *register_id <= 6 {
-    //     format!("t{0}", register_id)
-    // } else {
-    //     format!("a{0}", register_id - 7)
-    // }
     format!("{0}(sp)", register_id * 4)
 }
 
@@ -80,8 +75,8 @@ impl GenerateAsm for koopa::ir::FunctionData {
         if stack_len % 16 != 0 {
             stack_len += 16 - stack_len % 16;
         }
-        pre_str += &format!("addi sp, sp, -{0}\n", stack_len);
-        let end_str = format!("addi sp, sp, {0}\nret\n", stack_len);
+        pre_str += &format!("\tli t5, {0}\n\tadd sp, sp, t5\n", stack_len);
+        let end_str = format!("\tli t5, {0}\n\tadd sp, sp, t5\n\tret\n", -stack_len);
         let ans_s = pre_str + &s + &end_str;
         (ans_s, Res::Nothing)
     }
@@ -111,16 +106,16 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         match ret_res {
                             Res::Nothing => {}
                             Res::Imm => {
-                                s += &format!("li a0, {0}\n", ret_str);
+                                s += &format!("\tli a0, {0}\n", ret_str);
                             }
                             Res::Register(idx) => {
-                                s += &format!("lw a0, {0}\n", get_register_name(&idx));
+                                s += &format!("\tlw a0, {0}\n", get_register_name(&idx));
                             }
                             _ => {}
                         }
                     }
                     Some(idx) => {
-                        s += &format!("lw a0, {0}\n", get_register_name(&idx));
+                        s += &format!("\tlw a0, {0}\n", get_register_name(&idx));
                     }
                 }
                 res = Res::Return(0);
@@ -141,7 +136,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                             Res::Nothing => {}
                             Res::Imm => {
                                 s += &format!(
-                                    "li t5, {0}\nsw t5, {1}\n",
+                                    "\tli t5, {0}\n\tsw t5, {1}\n",
                                     lhs_str,
                                     get_register_name(register_id),
                                 );
@@ -168,7 +163,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                             Res::Nothing => {}
                             Res::Imm => {
                                 s += &format!(
-                                    "li t5, {0}\nsw t5, {1}\n",
+                                    "\tli t5, {0}\n\tsw t5, {1}\n",
                                     rhs_str,
                                     get_register_name(register_id),
                                 );
@@ -194,7 +189,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 match op {
                     BinaryOp::Add => {
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nadd t5, t5, t6\nsw t5, {2}\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\tadd t5, t5, t6\n\tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                             get_register_name(&res_reg),
@@ -202,7 +197,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     }
                     BinaryOp::Sub => {
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nsub t5, t5, t6\nsw t5, {2}\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\tsub t5, t5, t6\n\tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                             get_register_name(&res_reg),
@@ -210,7 +205,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     }
                     BinaryOp::Mul => {
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nmul t5, t5, t6\nsw t5, {2}\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\tmul t5, t5, t6\n\tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                             get_register_name(&res_reg),
@@ -218,7 +213,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     }
                     BinaryOp::Div => {
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\ndiv t5, t5, t6\nsw t5, {2}\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\tdiv t5, t5, t6\n\tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                             get_register_name(&res_reg),
@@ -226,7 +221,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     }
                     BinaryOp::Mod => {
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nrem t5, t5, t6\nsw t5, {2}\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\trem t5, t5, t6\n\tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                             get_register_name(&res_reg),
@@ -234,7 +229,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     }
                     BinaryOp::And => {
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nand t5, t5, t6\nsw t5, {2}\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\tand t5, t5, t6\n\tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                             get_register_name(&res_reg),
@@ -242,7 +237,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     }
                     BinaryOp::Or => {
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nor t5, t5, t6\nsw t5, {2}\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\tor t5, t5, t6\n\tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                             get_register_name(&res_reg),
@@ -251,24 +246,24 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     BinaryOp::Eq => {
                         // a == b <==> (a xor b) == 0
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nxor t5, t5, t6\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\txor t5, t5, t6\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                         );
-                        s += &format!("seqz t5, t5\nsw t5, {0}\n", get_register_name(&res_reg));
+                        s += &format!("\tseqz t5, t5\n\tsw t5, {0}\n", get_register_name(&res_reg));
                     }
                     BinaryOp::NotEq => {
                         // a == b <==> (a xor b) == 0
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nxor t5, t5, t6\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\txor t5, t5, t6\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                         );
-                        s += &format!("snez t5, t5\nsw t5, {0}\n", get_register_name(&res_reg));
+                        s += &format!("\tsnez t5, t5\n\tsw t5, {0}\n", get_register_name(&res_reg));
                     }
                     BinaryOp::Lt => {
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nslt t5, t5, t6\nsw t5, {2}\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\tslt t5, t5, t6\n\tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                             get_register_name(&res_reg),
@@ -276,7 +271,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     }
                     BinaryOp::Gt => {
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nsgt t5, t5, t6\nsw t5, {2}\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\tsgt t5, t5, t6\n\tsw t5, {2}\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                             get_register_name(&res_reg),
@@ -286,29 +281,82 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         // a <= b <==> a - b <= 0
                         // 首先判断是否有 a < b
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nslt t4, t5, t6\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\tslt t4, t5, t6\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                         );
                         // 再判断是否 a == b
-                        s += &format!("xor t3, t5, t6\nseqz t3, t3\n");
+                        s += &format!("\txor t3, t5, t6\n\tseqz t3, t3\n");
                         // 将两个判断结果作或
-                        s += &format!("or t5, t4, t3\nsw t5, {0}\n", get_register_name(&res_reg),);
+                        s += &format!(
+                            "\tor t5, t4, t3\n\tsw t5, {0}\n",
+                            get_register_name(&res_reg),
+                        );
                     }
                     BinaryOp::Ge => {
                         s += &format!(
-                            "lw t5, {0}\nlw t6, {1}\nsgt t4, t5, t6\n",
+                            "\tlw t5, {0}\n\tlw t6, {1}\n\tsgt t4, t5, t6\n",
                             get_register_name(&lhs_reg),
                             get_register_name(&rhs_reg),
                         );
                         // 再判断是否 a == b
-                        s += &format!("xor t3, t5, t6\nseqz t3, t3\n");
+                        s += &format!("\txor t3, t5, t6\n\tseqz t3, t3\n");
                         // 将两个判断结果作或
-                        s += &format!("or t5, t4, t3\nsw t5, {0}\n", get_register_name(&res_reg),);
+                        s += &format!(
+                            "\tor t5, t4, t3\n\tsw t5, {0}\n",
+                            get_register_name(&res_reg),
+                        );
                     }
                     _ => unreachable!(),
                 }
                 res = Res::Register(res_reg);
+            }
+            ValueKind::Alloc(alloc) => {
+                res = Res::Register(*register_id);
+                *register_id += 1;
+            }
+            ValueKind::Load(load) => {
+                let src = dfg_used.value(load.src());
+                match value_reg_map.get(&load.src()) {
+                    None => unreachable!(),
+                    Some(i) => {
+                        s += &format!(
+                            "\tlw t5, {0}\n\tsw t5, {1}\n",
+                            get_register_name(&i),
+                            get_register_name(register_id)
+                        );
+                    }
+                }
+                res = Res::Register(*register_id);
+                *register_id += 1;
+            }
+            ValueKind::Store(store) => {
+                let value = dfg_used.value(store.value());
+                match value_reg_map.get(&store.value()) {
+                    None => {
+                        let (value_str, value_res) =
+                            value.generate(dfg, register_id, value_reg_map);
+                        match value_res {
+                            Res::Nothing => {}
+                            Res::Imm => {
+                                s += &format!("\tli t5, {0}\n", value_str);
+                            }
+                            Res::Register(id) => {
+                                s += &format!("\tlw t5, {0}\n", get_register_name(&id));
+                            }
+                            _ => {}
+                        }
+                    }
+                    Some(i) => {
+                        s += &format!("\tlw t5, {0}\n", get_register_name(&i));
+                    }
+                }
+                match value_reg_map.get(&store.dest()) {
+                    Some(i) => {
+                        s += &format!("\tsw t5, {0}\n", get_register_name(i));
+                    }
+                    None => unreachable!(),
+                }
             }
             _ => unreachable!(),
         }
