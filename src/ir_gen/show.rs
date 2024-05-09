@@ -11,6 +11,7 @@ impl CompUnit {
             vars_table: HashMap::new(),
             field_depth: 0,
             flag_id: 0,
+            var_id: 0,
         };
         self.show(&mut compiler_info).0
     }
@@ -22,6 +23,7 @@ struct CompilerInfo {
     pub vars_table: HashMap<String, (Variable, i32)>,
     pub field_depth: i32,
     pub flag_id: i32,
+    pub var_id: i32,
 }
 
 enum Res {
@@ -169,8 +171,9 @@ impl Show for VarDef {
         let mut s = "".to_string();
         match self {
             VarDef::Def((ident, init_val)) => {
+                let mut vt = info.vars_table.clone();
                 // 首先检查该变量是否已被定义。
-                match info.vars_table.get_mut(ident) {
+                match vt.get_mut(ident) {
                     // 若已被定义，检查作用域
                     Some(int) => {
                         if int.1 == info.field_depth {
@@ -178,62 +181,55 @@ impl Show for VarDef {
                             panic!("变量{:?}重复定义！\n", ident);
                         } else {
                             // 生成该变量对应的指针的名字：@ident_depth
-                            let var = Variable::INT(format!("@{0}_{1}", ident, info.field_depth));
-                            // 修改变量表
-                            *int = (var, info.field_depth);
+                            let var_name = format!("@{0}_{1}", ident, info.var_id);
+                            info.var_id += 1;
                             // 为该变量进行alloc操作
-                            s += &format!("    @{0}_{1} = alloc i32\n", ident, info.field_depth);
+                            s += &format!("\t{0} = alloc i32\n", var_name);
                             // 计算init_val
                             let (init_s, init_res) = init_val.show(info);
                             // 将结果存进内存
                             match init_res {
                                 Res::Nothing => unreachable!(),
                                 Res::Imm => {
-                                    s += &format!(
-                                        "    store {0}, @{1}_{2}\n",
-                                        init_s, ident, info.field_depth
-                                    );
+                                    s += &format!("\tstore {0}, {1}\n", init_s, var_name);
                                 }
                                 Res::Temp(idx) => {
                                     s += &init_s;
-                                    s += &format!(
-                                        "    store %{0}, @{1}_{2}\n",
-                                        idx, ident, info.field_depth
-                                    );
+                                    s += &format!("\tstore %{0}, {1}\n", idx, var_name);
                                 }
                                 _ => {}
                             }
+                            let var = Variable::INT(var_name);
+                            // 修改变量表
+                            info.vars_table
+                                .insert(ident.clone(), (var, info.field_depth));
                         }
                     }
                     // 若尚未被定义，将其加入变量表
                     None => {
                         // 生成该变量对应的指针的名字：@ident_depth
-                        let var = Variable::INT(format!("@{0}_{1}", ident, info.field_depth));
-                        // 将其插入变量表中
-                        info.vars_table
-                            .insert(ident.clone(), (var, info.field_depth));
+                        let var_name = format!("@{0}_{1}", ident, info.var_id);
+                        info.var_id += 1;
                         // 为该变量进行alloc操作
-                        s += &format!("    @{0}_{1} = alloc i32\n", ident, info.field_depth);
+                        s += &format!("\t{0} = alloc i32\n", var_name);
                         // 计算init_val
                         let (init_s, init_res) = init_val.show(info);
                         // 将结果存进内存
                         match init_res {
                             Res::Nothing => unreachable!(),
                             Res::Imm => {
-                                s += &format!(
-                                    "    store {0}, @{1}_{2}\n",
-                                    init_s, ident, info.field_depth
-                                );
+                                s += &format!("\tstore {0}, {1}\n", init_s, var_name);
                             }
                             Res::Temp(idx) => {
                                 s += &init_s;
-                                s += &format!(
-                                    "    store %{0}, @{1}_{2}\n",
-                                    idx, ident, info.field_depth
-                                );
+                                s += &format!("\tstore %{0}, {1}\n", idx, var_name);
                             }
                             _ => {}
                         }
+                        let var = Variable::INT(var_name);
+                        // 将其插入变量表中
+                        info.vars_table
+                            .insert(ident.clone(), (var, info.field_depth));
                     }
                 }
             }
@@ -246,22 +242,26 @@ impl Show for VarDef {
                             panic!("变量{:?}重复定义！\n", ident);
                         } else {
                             // 生成该变量对应的指针的名字：@ident_depth
-                            let var = Variable::INT(format!("@{0}_{1}", ident, info.field_depth));
+                            let var_name = format!("@{0}_{1}", ident, info.var_id);
+                            info.var_id += 1;
+                            // 为该变量进行alloc操作
+                            s += &format!("\t{0} = alloc i32\n", var_name);
+                            let var = Variable::INT(var_name);
                             // 将其插入变量表中
                             *int = (var, info.field_depth);
-                            // 为该变量进行alloc操作
-                            s += &format!("    @{0}_{1} = alloc i32\n", ident, info.field_depth);
                         }
                     }
                     // 若尚未被定义，将其加入变量表
                     None => {
                         // 生成该变量对应的指针的名字：@ident_depth
-                        let var = Variable::INT(format!("@{0}_{1}", ident, info.field_depth));
+                        let var_name = format!("@{0}_{1}", ident, info.var_id);
+                        info.var_id += 1;
+                        // 为该变量进行alloc操作
+                        s += &format!("\t{0} = alloc i32\n", var_name);
+                        let var = Variable::INT(var_name);
                         // 将其插入变量表中
                         info.vars_table
                             .insert(ident.clone(), (var, info.field_depth));
-                        // 为该变量进行alloc操作
-                        s += &format!("    @{0}_{1} = alloc i32\n", ident, info.field_depth);
                     }
                 }
             }
@@ -343,6 +343,7 @@ impl Show for Stmt {
                 s += &block.show(&mut next_info).0;
                 info.temp_id = next_info.temp_id;
                 info.flag_id = next_info.flag_id;
+                info.var_id = next_info.var_id;
                 (s, Res::Nothing)
             }
             Stmt::Exp(exp) => {
