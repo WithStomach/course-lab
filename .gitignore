@@ -1,2 +1,5 @@
 target/
 .vscode/
+hello.c
+hello.o
+hello.koopa
