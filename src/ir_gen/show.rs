@@ -1,5 +1,5 @@
 use crate::ir_gen::ast::*;
-use std::{collections::HashMap, fmt::format};
+use std::collections::HashMap;
 
 use super::calc::Calc;
 
@@ -10,6 +10,7 @@ impl CompUnit {
             temp_id: 0,
             vars_table: HashMap::new(),
             field_depth: 0,
+            flag_id: 0,
         };
         self.show(&mut compiler_info).0
     }
@@ -20,6 +21,7 @@ struct CompilerInfo {
     pub temp_id: i32,
     pub vars_table: HashMap<String, (Variable, i32)>,
     pub field_depth: i32,
+    pub flag_id: i32,
 }
 
 enum Res {
@@ -56,7 +58,7 @@ impl Show for FuncDef {
         let mut next_info = info.clone();
         next_info.field_depth += 1;
         s += &self.block.show(&mut next_info).0;
-        s += "}\n";
+        s += "\tret 0\n}\n";
         (s, Res::Nothing)
     }
 }
@@ -69,12 +71,6 @@ impl Show for Block {
         for item in &self.items {
             (ds, res) = item.show(info);
             s += &ds;
-            match res {
-                Res::Ret => {
-                    break;
-                }
-                _ => {}
-            }
         }
         (s, Res::Nothing)
     }
@@ -288,18 +284,21 @@ impl Show for Stmt {
             Stmt::Return(exp) => {
                 match exp {
                     None => {
-                        s += "    ret\n";
+                        s += &format!("\tret\nflag{0}:\n", info.flag_id);
+                        info.flag_id += 1;
                     }
                     Some(e) => {
                         let (sub_exp_str, sub_res) = e.show(info);
                         match sub_res {
                             Res::Nothing => {}
                             Res::Imm => {
-                                s += &format!("    ret {}\n", sub_exp_str);
+                                s += &format!("\tret {0}\nflag{1}:\n", sub_exp_str, info.flag_id);
+                                info.flag_id += 1;
                             }
                             Res::Temp(id) => {
                                 s += &sub_exp_str;
-                                s += &format!("    ret %{}\n", id);
+                                s += &format!("\tret %{0}\nflag{1}:\n", id, info.flag_id);
+                                info.flag_id += 1;
                             }
                             _ => {}
                         }
