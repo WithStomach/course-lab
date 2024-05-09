@@ -307,7 +307,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                             get_register_name(&res_reg),
                         );
                     }
-                    _ => unreachable!(),
+                    _ => panic!("4"),
                 }
                 res = Res::Register(res_reg);
             }
@@ -318,7 +318,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
             ValueKind::Load(load) => {
                 let src = dfg_used.value(load.src());
                 match value_reg_map.get(&load.src()) {
-                    None => unreachable!(),
+                    None => panic!("3"),
                     Some(i) => {
                         s += &format!(
                             "\tlw t5, {0}\n\tsw t5, {1}\n",
@@ -355,10 +355,10 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     Some(i) => {
                         s += &format!("\tsw t5, {0}\n", get_register_name(i));
                     }
-                    None => unreachable!(),
+                    None => panic!("1"),
                 }
             }
-            _ => unreachable!(),
+            _ => panic!("2"),
         }
         (s, res)
     }
