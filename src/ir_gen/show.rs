@@ -284,7 +284,7 @@ impl Show for Stmt {
             Stmt::Return(exp) => {
                 match exp {
                     None => {
-                        s += &format!("\tret\nflag{0}:\n", info.flag_id);
+                        s += &format!("\tret\n%flag{0}:\n", info.flag_id);
                         info.flag_id += 1;
                     }
                     Some(e) => {
@@ -292,12 +292,12 @@ impl Show for Stmt {
                         match sub_res {
                             Res::Nothing => {}
                             Res::Imm => {
-                                s += &format!("\tret {0}\nflag{1}:\n", sub_exp_str, info.flag_id);
+                                s += &format!("\tret {0}\n%flag{1}:\n", sub_exp_str, info.flag_id);
                                 info.flag_id += 1;
                             }
                             Res::Temp(id) => {
                                 s += &sub_exp_str;
-                                s += &format!("\tret %{0}\nflag{1}:\n", id, info.flag_id);
+                                s += &format!("\tret %{0}\n%flag{1}:\n", id, info.flag_id);
                                 info.flag_id += 1;
                             }
                             _ => {}

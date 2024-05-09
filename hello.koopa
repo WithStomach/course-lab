@@ -1,8 +1,8 @@
 fun @main(): i32{
 %entry:
 	ret 0
-flag0:
+%flag0:
 	ret 0
-flag1:
+%flag1:
 	ret 0
 }
