@@ -1,4 +1,4 @@
-use koopa::ir::{dfg::DataFlowGraph, entities::Value, values::Alloc, BinaryOp, Program, ValueKind};
+use koopa::ir::{dfg::DataFlowGraph, entities::Value, BinaryOp, Program, ValueKind};
 use std::collections::HashMap;
 
 enum Res {
@@ -67,7 +67,7 @@ impl GenerateAsm for koopa::ir::FunctionData {
                     Res::Register(idx) => {
                         value_reg_map.insert(inst, idx);
                     }
-                    _ => {}
+                    Res::Return(ret) => {}
                 }
             }
         }

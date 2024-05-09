@@ -1,8 +1,11 @@
-fun @main(): i32{
-%entry:
-	ret 0
-flag0:
-	ret 0
-flag1:
-	ret 0
-}
+.text
+.global main
+main:
+	li t5, 16
+	add sp, sp, t5
+	li t5, 0
+	sw t5, 0(sp)
+	li a0, 0
+	li t5, -16
+	add sp, sp, t5
+	ret
