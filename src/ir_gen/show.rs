@@ -342,6 +342,7 @@ impl Show for Stmt {
                 next_info.field_depth += 1;
                 s += &block.show(&mut next_info).0;
                 info.temp_id = next_info.temp_id;
+                info.flag_id = next_info.flag_id;
                 (s, Res::Nothing)
             }
             Stmt::Exp(exp) => {

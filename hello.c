@@ -1,5 +1,11 @@
 int main()
 {
-    return 0;
-    return 0;
+    int a = 0;
+    {
+        int a = 3;
+        a = a + 1;
+        return a;
+    }
+    a = a + 1;
+    return a;
 }
