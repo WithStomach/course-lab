@@ -276,6 +276,28 @@ impl Show for InitVal {
     }
 }
 
+impl Show for If {
+    fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
+        let mut s = "".to_string();
+        let res = Res::Nothing;
+        let (cond_str, cond_res) = self.cond.show(info);
+        match cond_res {
+            Res::Temp(temp_id) => {
+                s += &cond_str;
+                s += &format!(
+                    "\tbr %{0}, %flag{1}, %flag{2}\n",
+                    temp_id,
+                    info.flag_id,
+                    info.flag_id + 1
+                );
+                info.flag_id += 2;
+            }
+            _ => unreachable!(),
+        }
+        (s, res)
+    }
+}
+
 impl Show for Stmt {
     fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
         let mut s = "".to_string();
@@ -350,9 +372,20 @@ impl Show for Stmt {
                 match exp {
                     None => {}
                     Some(e) => {
-                        s += &e.show(info).0;
+                        let (exp_str, exp_res) = e.show(info);
+                        match exp_res {
+                            Res::Temp(temp_id) => {
+                                s += &exp_str;
+                            }
+                            Res::Imm => {}
+                            _ => unreachable!(),
+                        }
                     }
                 }
+                (s, Res::Nothing)
+            }
+            Stmt::IF(if_stmt) => {
+                s += &if_stmt.show(info).0;
                 (s, Res::Nothing)
             }
         }

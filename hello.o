@@ -1,11 +1,15 @@
-.text
-.global main
-main:
-	li t5, 16
-	add sp, sp, t5
-	li t5, 0
-	sw t5, 0(sp)
-	li a0, 0
-	li t5, -16
-	add sp, sp, t5
-	ret
+fun @main(): i32{
+%entry:
+    %0 = add 1, 2
+	@a_0 = alloc i32
+	store 0, @a_0
+    %1 = add 1, 2
+	@a_1 = alloc i32
+	store 1, @a_1
+    %2 = add 1, 2
+    %3 = add 9, 8
+	ret %3
+%flag0:
+    %4 = add 1, 2
+	ret 0
+}

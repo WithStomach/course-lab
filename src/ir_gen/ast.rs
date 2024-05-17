@@ -90,6 +90,14 @@ pub struct ConstInitVal {
     pub const_exp: ConstExp,
 }
 
+/// "if" "(" cond ")" then_stmt ["else" self_stmt]
+#[derive(Debug, PartialEq, Clone)]
+pub struct If {
+    pub cond: Exp,
+    pub then_stmt: Stmt,
+    pub else_stmt: Option<Stmt>,
+}
+
 /// Stmt ::= LVal "=" Exp ";"
 ///       | "return" Exp? ";"
 ///       | Exp? ";"
@@ -100,6 +108,7 @@ pub enum Stmt {
     Assign((String, Exp)),
     Exp(Option<Exp>),
     Block(Block),
+    IF(Box<If>),
 }
 
 /// Exp ::= LOrExp

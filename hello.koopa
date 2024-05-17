@@ -1,6 +1,9 @@
 fun @main(): i32{
 %entry:
-	ret 0
+	@a_0 = alloc i32
+	store 0, @a_0
+    %0 = load @a_0
+	ret %0
 %flag0:
 	ret 0
 }

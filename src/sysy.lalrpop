@@ -76,10 +76,27 @@ ConstInitVal: ConstInitVal = <const_exp: ConstExp> => ConstInitVal{ <> };
 InitVal: InitVal = <exp: Exp> => InitVal{ <> };
 
 Stmt: Stmt = {
+  MatchedStmt => <>,
+  OpenStmt => <>,
+}
+
+MatchedStmt: Stmt = {
   "return" <exp: (Exp)?> ";" => Stmt::Return(exp),
   <lval: LVal> "=" <exp: Exp> ";" => Stmt::Assign((lval, exp)),
   <exp: (Exp)?> ";" => Stmt::Exp(exp),
+  "if" "(" <cond: Exp> ")" <then_stmt: MatchedStmt> "else" <else_stmt: MatchedStmt> => {
+    Stmt::IF(Box::new(If { cond, then_stmt, else_stmt: Some(else_stmt) }))
+  },
   <block: Block> => Stmt::Block(block),
+}
+
+OpenStmt: Stmt = {
+  "if" "(" <cond: Exp> ")" <then_stmt: Stmt> => {
+    Stmt::IF(Box::new(If { cond, then_stmt, else_stmt: None }))
+  },
+  "if" "(" <cond: Exp> ")" <then_stmt: MatchedStmt> "else" <else_stmt: OpenStmt> => {
+    Stmt::IF(Box::new(If { cond, then_stmt, else_stmt: Some(else_stmt) }))
+  },
 }
 
 Exp: Exp = <lor_exp: LOrExp> => Exp{lor_exp: Box::new(lor_exp)};
