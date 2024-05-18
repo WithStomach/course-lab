@@ -1,5 +1,5 @@
 use crate::ir_gen::ast::*;
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::format};
 
 use super::calc::Calc;
 
@@ -280,20 +280,46 @@ impl Show for If {
     fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
         let mut s = "".to_string();
         let res = Res::Nothing;
+
+        let then_flag = format!("%flag{0}", info.flag_id);
+        let else_flag = format!("%flag{0}", info.flag_id + 1);
+        let end_flag = format!("%flag{0}", info.flag_id + 2);
+        info.flag_id += 3;
+
         let (cond_str, cond_res) = self.cond.show(info);
         match cond_res {
             Res::Temp(temp_id) => {
                 s += &cond_str;
+                s += &format!("\tbr %{0}, {1}, {2}\n", temp_id, then_flag, else_flag);
+            }
+            Res::Imm => {
                 s += &format!(
-                    "\tbr %{0}, %flag{1}, %flag{2}\n",
-                    temp_id,
-                    info.flag_id,
-                    info.flag_id + 1
+                    "\t%{0} = add {1}, 0\n\tbr %{0}, {2}, {3}\n",
+                    info.temp_id, cond_str, then_flag, else_flag
                 );
-                info.flag_id += 2;
+                info.temp_id += 1;
             }
             _ => unreachable!(),
         }
+
+        s += &(then_flag + ":\n");
+        let (then_str, then_res) = self.then_stmt.show(info);
+        s += &(then_str + "\tjump " + &end_flag + "\n");
+
+        s += &(else_flag + ":\n");
+        match &self.else_stmt {
+            None => {
+                s += &format!("\tjump {0}", end_flag);
+            }
+            Some(stmt) => {
+                let (else_str, else_res) = stmt.show(info);
+                s += &else_str;
+                s += &format!("\tjump {0}\n", end_flag);
+            }
+        }
+
+        s += &(end_flag + ":\n");
+
         (s, res)
     }
 }

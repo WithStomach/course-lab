@@ -3,7 +3,18 @@ fun @main(): i32{
 	@a_0 = alloc i32
 	store 0, @a_0
     %0 = load @a_0
-	ret %0
+	br %0, %flag0, %flag1
 %flag0:
+	ret 0
+%flag3:
+	jump %flag2
+%flag1:
+	ret 1
+%flag4:
+	jump %flag2
+%flag2:
+    %1 = load @a_0
+	ret %1
+%flag5:
 	ret 0
 }
