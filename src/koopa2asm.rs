@@ -75,7 +75,7 @@ impl GenerateAsm for koopa::ir::FunctionData {
                     Res::Register(idx) => {
                         value_reg_map.insert(inst, idx);
                     }
-                    Res::Return(ret) => {}
+                    Res::Return(ret) => s += &format!("\tj {0}_end\n", &self.name()[1..]),
                 }
             }
         }
@@ -84,7 +84,11 @@ impl GenerateAsm for koopa::ir::FunctionData {
             stack_len += 16 - stack_len % 16;
         }
         pre_str += &format!("\tli t5, {0}\n\tadd sp, sp, t5\n", stack_len);
-        let end_str = format!("\tli t5, {0}\n\tadd sp, sp, t5\n\tret\n", -stack_len);
+        let end_str = format!(
+            "{0}_end:\n\tli t5, {1}\n\tadd sp, sp, t5\n\tret\n",
+            &self.name()[1..],
+            -stack_len
+        );
         let ans_s = pre_str + &s + &end_str;
         (ans_s, Res::Nothing)
     }
@@ -126,7 +130,6 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         s += &format!("\tlw a0, {0}\n", get_register_name(&idx));
                     }
                 }
-                s += "\tret\n";
                 res = Res::Return(0);
             }
             ValueKind::Binary(exp) => {
