@@ -126,6 +126,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                         s += &format!("\tlw a0, {0}\n", get_register_name(&idx));
                     }
                 }
+                s += "\tret\n";
                 res = Res::Return(0);
             }
             ValueKind::Binary(exp) => {
