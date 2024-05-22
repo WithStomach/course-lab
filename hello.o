@@ -1,15 +1,40 @@
-fun @main(): i32{
+.text
+.global main
+main:
+	li t5, 32
+	add sp, sp, t5
 %entry:
-    %0 = add 1, 2
-	@a_0 = alloc i32
-	store 0, @a_0
-    %1 = add 1, 2
-	@a_1 = alloc i32
-	store 1, @a_1
-    %2 = add 1, 2
-    %3 = add 9, 8
-	ret %3
+	li t5, 2
+	sw t5, 0(sp)
+	li t5, 1
+	sw t5, 4(sp)
+	li t5, 0
+	sw t5, 8(sp)
+	lw t5, 4(sp)
+	lw t6, 8(sp)
+	add t5, t5, t6
+	sw t5, 12(sp)
+	lw t5, 12(sp)
+	bnez t5, %flag0
+	j %flag1
 %flag0:
-    %4 = add 1, 2
-	ret 0
-}
+	lw t5, 0(sp)
+	sw t5, 16(sp)
+	li t5, 1
+	sw t5, 20(sp)
+	lw t5, 16(sp)
+	lw t6, 20(sp)
+	add t5, t5, t6
+	sw t5, 24(sp)
+	lw t5, 24(sp)
+	sw t5, 0(sp)
+	j %flag2
+%flag1:
+	j %flag2
+%flag2:
+	lw t5, 0(sp)
+	sw t5, 28(sp)
+	lw a0, 28(sp)
+	li t5, -32
+	add sp, sp, t5
+	ret

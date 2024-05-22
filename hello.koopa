@@ -2,7 +2,7 @@ fun @main(): i32{
 %entry:
 	@a_0 = alloc i32
 	store 2, @a_0
-    %0 = load @a_0
+	%0 = add 1, 0
 	br %0, %flag0, %flag1
 %flag0:
     %1 = load @a_0
@@ -10,7 +10,6 @@ fun @main(): i32{
     store %2, @a_0
 	jump %flag2
 %flag1:
-    store 0, @a_0
 	jump %flag2
 %flag2:
     %3 = load @a_0

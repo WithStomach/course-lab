@@ -55,7 +55,15 @@ impl GenerateAsm for koopa::ir::FunctionData {
         pre_str += &self.name()[1..];
         pre_str += ":\n";
         let mut s = "".to_string();
-        for (&_bb, node) in self.layout().bbs() {
+        for (&bb, node) in self.layout().bbs() {
+            let bb_data = self.dfg().bb(bb);
+            match bb_data.name() {
+                Some(name) => {
+                    s += name;
+                    s += ":\n";
+                }
+                None => {}
+            }
             for &inst in node.insts().keys() {
                 let value_data = self.dfg().value(inst);
                 let (ret_str, ret_res) =
@@ -358,6 +366,38 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     None => panic!("1"),
                 }
             }
+            ValueKind::Jump(jump) => {
+                let target_bb = dfg_used.bb(jump.target());
+                match target_bb.name() {
+                    Some(name) => {
+                        s += &format!("\tj {0}\n", name);
+                    }
+                    None => unreachable!(),
+                }
+            }
+            ValueKind::Branch(branch) => match value_reg_map.get(&branch.cond()) {
+                Some(i) => {
+                    s += &format!("\tlw t5, {0}\n\tbnez t5, ", get_register_name(i));
+                    let true_bb = dfg_used.bb(branch.true_bb());
+                    let false_bb = dfg_used.bb(branch.false_bb());
+                    match true_bb.name() {
+                        Some(name) => {
+                            s += name;
+                            s += "\n";
+                        }
+                        _ => unreachable!(),
+                    }
+                    s += "\tj ";
+                    match false_bb.name() {
+                        Some(name) => {
+                            s += name;
+                            s += "\n";
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+                _ => unreachable!(),
+            },
             _ => panic!("2"),
         }
         (s, res)

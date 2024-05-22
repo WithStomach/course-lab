@@ -309,7 +309,7 @@ impl Show for If {
         s += &(else_flag + ":\n");
         match &self.else_stmt {
             None => {
-                s += &format!("\tjump {0}", end_flag);
+                s += &format!("\tjump {0}\n", end_flag);
             }
             Some(stmt) => {
                 let (else_str, else_res) = stmt.show(info);
