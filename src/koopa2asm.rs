@@ -370,7 +370,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 let target_bb = dfg_used.bb(jump.target());
                 match target_bb.name() {
                     Some(name) => {
-                        s += &format!("\tj {0}\n", name);
+                        s += &format!("\tj {0}\n", &name[1..]);
                     }
                     None => unreachable!(),
                 }
