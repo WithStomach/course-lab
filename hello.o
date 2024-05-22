@@ -1,7 +1,7 @@
 .text
 .global main
 main:
-	li t5, 80
+	li t5, 96
 	add sp, sp, t5
 entry:
 	li t5, 0
@@ -66,11 +66,38 @@ flag3:
 flag4:
 	j flag5
 flag5:
-	lw t5, 0(sp)
+	li t5, 7
 	sw t5, 68(sp)
-	lw a0, 68(sp)
+	li t5, 6
+	sw t5, 72(sp)
+	lw t5, 68(sp)
+	lw t6, 72(sp)
+	xor t5, t5, t6
+	snez t5, t5
+	sw t5, 76(sp)
+	lw t5, 76(sp)
+	bnez t5, flag6
+	j flag7
+flag6:
+	lw t5, 0(sp)
+	sw t5, 80(sp)
+	li t5, 128
+	sw t5, 84(sp)
+	lw t5, 80(sp)
+	lw t6, 84(sp)
+	add t5, t5, t6
+	sw t5, 88(sp)
+	lw t5, 88(sp)
+	sw t5, 0(sp)
+	j flag8
+flag7:
+	j flag8
+flag8:
+	lw t5, 0(sp)
+	sw t5, 92(sp)
+	lw a0, 92(sp)
 	j main_end
 main_end:
-	li t5, -80
+	li t5, -96
 	add sp, sp, t5
 	ret

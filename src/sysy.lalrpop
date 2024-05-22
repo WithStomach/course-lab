@@ -88,6 +88,11 @@ MatchedStmt: Stmt = {
     Stmt::IF(Box::new(If { cond, then_stmt, else_stmt: Some(else_stmt) }))
   },
   <block: Block> => Stmt::Block(block),
+  "while" "(" <cond: Exp> ")" <body_stmt: MatchedStmt> => {
+    Stmt::WHILE(Box::new(While{ <> }))
+  },
+  "break" ";" => Stmt::Break,
+  "continue" ";" => Stmt::Continue,
 }
 
 OpenStmt: Stmt = {
@@ -96,6 +101,9 @@ OpenStmt: Stmt = {
   },
   "if" "(" <cond: Exp> ")" <then_stmt: MatchedStmt> "else" <else_stmt: OpenStmt> => {
     Stmt::IF(Box::new(If { cond, then_stmt, else_stmt: Some(else_stmt) }))
+  },
+  "while" "(" <cond: Exp> ")" <body_stmt: OpenStmt> => {
+    Stmt::WHILE(Box::new(While { <> }))
   },
 }
 

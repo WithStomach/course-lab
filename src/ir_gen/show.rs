@@ -1,5 +1,5 @@
 use crate::ir_gen::ast::*;
-use std::{collections::HashMap, fmt::format};
+use std::collections::HashMap;
 
 use super::calc::Calc;
 
@@ -12,6 +12,8 @@ impl CompUnit {
             field_depth: 0,
             flag_id: 0,
             var_id: 0,
+            enter_flag: -1,
+            end_flag: -1,
         };
         self.show(&mut compiler_info).0
     }
@@ -24,6 +26,8 @@ struct CompilerInfo {
     pub field_depth: i32,
     pub flag_id: i32,
     pub var_id: i32,
+    pub enter_flag: i32,
+    pub end_flag: i32,
 }
 
 enum Res {
@@ -74,7 +78,7 @@ impl Show for Block {
             (ds, res) = item.show(info);
             s += &ds;
         }
-        (s, Res::Nothing)
+        (s, res)
     }
 }
 
@@ -305,7 +309,6 @@ impl Show for If {
         s += &(then_flag + ":\n");
         let (then_str, then_res) = self.then_stmt.show(info);
         s += &(then_str + "\tjump " + &end_flag + "\n");
-
         s += &(else_flag + ":\n");
         match &self.else_stmt {
             None => {
@@ -320,6 +323,46 @@ impl Show for If {
 
         s += &(end_flag + ":\n");
 
+        (s, res)
+    }
+}
+
+impl Show for While {
+    fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
+        let mut s = "".to_string();
+        let res = Res::Nothing;
+
+        let enter_flag = format!("%flag{0}", info.flag_id);
+        let body_flag = format!("%flag{0}", info.flag_id + 1);
+        let end_flag = format!("%flag{0}", info.flag_id + 2);
+        info.flag_id += 3;
+        s += &format!("{0}:\n", enter_flag);
+        let (cond_str, cond_res) = self.cond.show(info);
+        match cond_res {
+            Res::Temp(temp_id) => {
+                s += &cond_str;
+                s += &format!("\tbr %{0}, {1}, {2}\n", temp_id, body_flag, end_flag);
+            }
+            Res::Imm => {
+                s += &format!(
+                    "\t%{0} = add {1}, 0\n\tbr %{0}, {2}, {3}\n",
+                    info.temp_id, cond_str, body_flag, end_flag
+                );
+                info.temp_id += 1;
+            }
+            _ => unreachable!(),
+        }
+        s += &(body_flag + ":\n");
+        let ori_enter_flag = info.enter_flag;
+        let ori_end_flag = info.end_flag;
+        info.enter_flag = info.flag_id - 3;
+        info.end_flag = info.flag_id - 1;
+        let (body_str, body_res) = self.body_stmt.show(info);
+        info.enter_flag = ori_enter_flag;
+        info.end_flag = ori_end_flag;
+        s += &body_str;
+        s += &format!("\tjump {0}\n", enter_flag);
+        s += &(end_flag + ":\n");
         (s, res)
     }
 }
@@ -388,11 +431,12 @@ impl Show for Stmt {
             Stmt::Block(block) => {
                 let mut next_info = info.clone();
                 next_info.field_depth += 1;
-                s += &block.show(&mut next_info).0;
+                let (blk_str, blk_res) = block.show(&mut next_info);
+                s += &blk_str;
                 info.temp_id = next_info.temp_id;
                 info.flag_id = next_info.flag_id;
                 info.var_id = next_info.var_id;
-                (s, Res::Nothing)
+                (s, blk_res)
             }
             Stmt::Exp(exp) => {
                 match exp {
@@ -414,6 +458,25 @@ impl Show for Stmt {
                 s += &if_stmt.show(info).0;
                 (s, Res::Nothing)
             }
+            Stmt::WHILE(while_stmt) => {
+                s += &format!("\tjump %flag{0}\n", info.flag_id);
+                s += &while_stmt.show(info).0;
+                (s, Res::Nothing)
+            }
+            Stmt::Break => {
+                s += &format!("\tjump %flag{0}\n%flag{1}:\n", info.end_flag, info.flag_id);
+                info.flag_id += 1;
+                (s, Res::Ret)
+            }
+            Stmt::Continue => {
+                s += &format!(
+                    "\tjump %flag{0}\n%flag{1}:\n",
+                    info.enter_flag, info.flag_id
+                );
+                info.flag_id += 1;
+                (s, Res::Ret)
+            }
+            _ => unreachable!(),
         }
     }
 }

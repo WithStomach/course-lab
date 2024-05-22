@@ -98,9 +98,18 @@ pub struct If {
     pub else_stmt: Option<Stmt>,
 }
 
+/// "if" "(" cond ")" then_stmt ["else" self_stmt]
+#[derive(Debug, PartialEq, Clone)]
+pub struct While {
+    pub cond: Exp,
+    pub body_stmt: Stmt,
+}
+
 /// Stmt ::= LVal "=" Exp ";"
 ///       | "return" Exp? ";"
 ///       | Exp? ";"
+///       | "while" "(" Exp ")" Stmt
+///       | "if" "(" Exp ")" Stmt ["else" Stmt]
 ///       | Block
 #[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
@@ -109,6 +118,9 @@ pub enum Stmt {
     Exp(Option<Exp>),
     Block(Block),
     IF(Box<If>),
+    WHILE(Box<While>),
+    Break,
+    Continue,
 }
 
 /// Exp ::= LOrExp
