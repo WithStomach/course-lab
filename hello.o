@@ -1,40 +1,76 @@
 .text
 .global main
 main:
-	li t5, 32
+	li t5, 80
 	add sp, sp, t5
-%entry:
-	li t5, 2
-	sw t5, 0(sp)
-	li t5, 1
-	sw t5, 4(sp)
+entry:
 	li t5, 0
-	sw t5, 8(sp)
-	lw t5, 4(sp)
-	lw t6, 8(sp)
-	add t5, t5, t6
-	sw t5, 12(sp)
-	lw t5, 12(sp)
-	bnez t5, %flag0
-	j %flag1
-%flag0:
-	lw t5, 0(sp)
-	sw t5, 16(sp)
-	li t5, 1
-	sw t5, 20(sp)
-	lw t5, 16(sp)
-	lw t6, 20(sp)
-	add t5, t5, t6
-	sw t5, 24(sp)
-	lw t5, 24(sp)
 	sw t5, 0(sp)
-	j %flag2
-%flag1:
-	j %flag2
-%flag2:
-	lw t5, 0(sp)
+	li t5, 2
+	sw t5, 4(sp)
+	li t5, 3
+	sw t5, 8(sp)
+	li t5, 3
+	sw t5, 12(sp)
+	li t5, 4
+	sw t5, 16(sp)
+	lw t5, 4(sp)
+	sw t5, 20(sp)
+	lw t5, 8(sp)
+	sw t5, 24(sp)
+	lw t5, 20(sp)
+	lw t6, 24(sp)
+	sgt t5, t5, t6
 	sw t5, 28(sp)
-	lw a0, 28(sp)
-	li t5, -32
+	lw t5, 28(sp)
+	bnez t5, flag0
+	j flag1
+flag0:
+	lw t5, 0(sp)
+	sw t5, 32(sp)
+	li t5, 1
+	sw t5, 36(sp)
+	lw t5, 32(sp)
+	lw t6, 36(sp)
+	add t5, t5, t6
+	sw t5, 40(sp)
+	lw t5, 40(sp)
+	sw t5, 0(sp)
+	j flag2
+flag1:
+	j flag2
+flag2:
+	lw t5, 4(sp)
+	sw t5, 44(sp)
+	lw t5, 12(sp)
+	sw t5, 48(sp)
+	lw t5, 44(sp)
+	lw t6, 48(sp)
+	slt t5, t5, t6
+	sw t5, 52(sp)
+	lw t5, 52(sp)
+	bnez t5, flag3
+	j flag4
+flag3:
+	lw t5, 0(sp)
+	sw t5, 56(sp)
+	li t5, 2
+	sw t5, 60(sp)
+	lw t5, 56(sp)
+	lw t6, 60(sp)
+	add t5, t5, t6
+	sw t5, 64(sp)
+	lw t5, 64(sp)
+	sw t5, 0(sp)
+	j flag5
+flag4:
+	j flag5
+flag5:
+	lw t5, 0(sp)
+	sw t5, 68(sp)
+	lw a0, 68(sp)
+	j main_end
+main_end:
+	li t5, -80
 	add sp, sp, t5
 	ret
