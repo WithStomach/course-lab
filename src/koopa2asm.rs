@@ -59,7 +59,7 @@ impl GenerateAsm for koopa::ir::FunctionData {
             let bb_data = self.dfg().bb(bb);
             match bb_data.name() {
                 Some(name) => {
-                    s += name;
+                    s += &name[1..];
                     s += ":\n";
                 }
                 None => {}
@@ -382,7 +382,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     let false_bb = dfg_used.bb(branch.false_bb());
                     match true_bb.name() {
                         Some(name) => {
-                            s += name;
+                            s += &name[1..];
                             s += "\n";
                         }
                         _ => unreachable!(),
@@ -390,7 +390,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     s += "\tj ";
                     match false_bb.name() {
                         Some(name) => {
-                            s += name;
+                            s += &name[1..];
                             s += "\n";
                         }
                         _ => unreachable!(),
