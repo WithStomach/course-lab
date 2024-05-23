@@ -20,8 +20,9 @@ impl CompUnit {
 }
 
 #[derive(Debug, PartialEq, Clone)]
-struct CompilerInfo {
+pub struct CompilerInfo {
     pub temp_id: i32,
+    /// var_ident, (variable, depth)
     pub vars_table: HashMap<String, (Variable, i32)>,
     pub field_depth: i32,
     pub flag_id: i32,
@@ -43,7 +44,21 @@ trait Show {
 
 impl Show for CompUnit {
     fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
-        self.func_def.show(info)
+        let mut s = "".to_string();
+        let res = Res::Nothing;
+        match &*self.comp_unit {
+            Some(sub_comp_unit) => s += &sub_comp_unit.show(info).0,
+            None => {}
+        }
+        let (func_str, func_res) = self.func_def.show(info);
+        s += &func_str;
+        let fun_var = Variable::Func((
+            format!("@{0}", self.func_def.id),
+            self.func_def.func_type.clone(),
+        ));
+        info.vars_table
+            .insert(self.func_def.id.clone(), (fun_var, 0));
+        (s, res)
     }
 }
 
@@ -51,21 +66,92 @@ impl Show for FuncDef {
     fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
         let mut s = "fun @".to_string();
         s += &self.id;
-        s += "(): ";
+        match &self.func_f_params {
+            None => {
+                s += "()";
+            }
+            Some(func_f_params) => {
+                s += &format!("({0})", func_f_params.show(info).0);
+            }
+        }
         match self.func_type {
             ItemType::Int => {
-                s += "i32";
+                s += ": i32";
             }
-            ItemType::Double => {
-                s += "double";
-            }
+            ItemType::Void => {}
         }
         s += "{\n%entry:\n";
         let mut next_info = info.clone();
         next_info.field_depth += 1;
+        match &self.func_f_params {
+            None => {}
+            Some(func_f_params) => {
+                s += &func_f_params.allocate_for_params(&mut next_info);
+            }
+        }
         s += &self.block.show(&mut next_info).0;
-        s += "\tret 0\n}\n";
+        s += "\tret\n}\n";
         (s, Res::Nothing)
+    }
+}
+
+impl Show for FuncFParams {
+    fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
+        let mut s = "".to_string();
+        let res = Res::Nothing;
+        let mut i = 0;
+        for param in &self.func_f_params {
+            if i == 0 {
+                s += &format!("@{0}: i32", param.id);
+            } else {
+                s += &format!(", @{0}: i32", param.id);
+            }
+            i += 1;
+        }
+        (s, res)
+    }
+}
+
+impl FuncFParams {
+    pub fn allocate_for_params(&self, info: &mut CompilerInfo) -> String {
+        let mut s = "".to_string();
+        for param in &self.func_f_params {
+            let var = Variable::INT(format!("%{0}", param.id));
+            info.vars_table
+                .insert(param.id.clone(), (var, info.field_depth));
+            s += &format!("\t%{0} = alloc i32\n\tstore @{0}, %{0}\n", param.id);
+        }
+        s
+    }
+}
+
+impl Show for FuncRParams {
+    fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
+        let mut s = "".to_string();
+        let res = Res::Nothing;
+        let mut i = 0;
+        for exp in &self.func_r_params {
+            let (exp_str, exp_res) = exp.show(info);
+            match exp_res {
+                Res::Imm => {
+                    if i == 0 {
+                        s += &exp_str;
+                    } else {
+                        s += &format!(", {0}", exp_str);
+                    }
+                }
+                Res::Temp(temp) => {
+                    if i == 0 {
+                        s += &format!("%{0}", temp);
+                    } else {
+                        s += &format!(", %{0}", temp);
+                    }
+                }
+                _ => unreachable!(),
+            }
+            i += 1;
+        }
+        (s, res)
     }
 }
 
@@ -421,6 +507,7 @@ impl Show for Stmt {
                                     _ => {}
                                 }
                             }
+                            _ => unreachable!(),
                         }
                     }
                     // 若变量未被定义过，报错
@@ -448,6 +535,9 @@ impl Show for Stmt {
                                 s += &exp_str;
                             }
                             Res::Imm => {}
+                            Res::Nothing => {
+                                s += &exp_str;
+                            }
                             _ => unreachable!(),
                         }
                     }
@@ -543,6 +633,35 @@ impl Show for UnaryExp {
                     }
                 }
             }
+            UnaryExp::FuncItem((id, func_r_params)) => {
+                let mut func_r_params_str = "".to_string();
+                match func_r_params {
+                    Some(func_params) => {
+                        func_r_params_str += &func_params.show(info).0;
+                    }
+                    None => {}
+                }
+                match info.vars_table.get(id) {
+                    Some((func, depth)) => match func {
+                        Variable::Func((func_name, func_type)) => {
+                            match func_type {
+                                ItemType::Int => {
+                                    s += &format!("\t%{0} = ", info.temp_id);
+                                    res = Res::Temp(info.temp_id);
+                                    info.temp_id += 1;
+                                }
+                                ItemType::Void => {
+                                    s += "\t";
+                                }
+                            }
+                            s += &format!("call {0}({1})\n", func_name, func_r_params_str);
+                        }
+                        _ => unreachable!(),
+                    },
+                    None => unreachable!(),
+                }
+            }
+            _ => unreachable!(),
         }
         (s, res)
     }
@@ -577,6 +696,7 @@ impl Show for PrimaryExp {
                             res = Res::Temp(info.temp_id);
                             info.temp_id += 1;
                         }
+                        _ => unreachable!(),
                     }
                 }
                 None => unreachable!(),

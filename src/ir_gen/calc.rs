@@ -118,6 +118,7 @@ impl Calc for UnaryExp {
                 UnaryOp::Negative => -unary_exp.calculate(vars_table),
                 UnaryOp::Inversion => (unary_exp.calculate(vars_table) == 0) as i32,
             },
+            _ => unreachable!(),
         }
     }
 }

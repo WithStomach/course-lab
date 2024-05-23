@@ -6,27 +6,50 @@ pub enum Variable {
     INT(String),
     // 对于int类型的常量，需要保存的信息只有它的值
     ConstINT(i32),
+    // 对于函数对象，保存其koopaIR中的函数名（e.g. @main)及其返回值类型
+    Func((String, ItemType)),
 }
 
-/// CompUnit ::= FuncDef
-#[derive(Debug)]
+/// CompUnit ::= [CompUnit] FuncDef
+#[derive(Debug, PartialEq, Clone)]
 pub struct CompUnit {
+    pub comp_unit: Box<Option<CompUnit>>,
     pub func_def: FuncDef,
 }
 
-/// FuncDef ::= ItemType IDENT "(" ")" Block
-#[derive(Debug, Clone)]
+/// FuncDef ::= FuncType IDENT "(" [FuncFParams] ")" Block
+#[derive(Debug, PartialEq, Clone)]
 pub struct FuncDef {
     pub func_type: ItemType,
     pub id: String,
+    pub func_f_params: Option<FuncFParams>,
     pub block: Block,
+}
+
+/// FuncFParams ::= FuncFParam {"," FuncFParam}
+#[derive(Debug, PartialEq, Clone)]
+pub struct FuncFParams {
+    pub func_f_params: Vec<FuncFParam>,
+}
+
+/// FuncFParam  ::= BType IDENT
+#[derive(Debug, PartialEq, Clone)]
+pub struct FuncFParam {
+    pub b_type: ItemType,
+    pub id: String,
+}
+
+/// FuncRParams ::= Exp {"," Exp}
+#[derive(Debug, PartialEq, Clone)]
+pub struct FuncRParams {
+    pub func_r_params: Vec<Exp>,
 }
 
 /// ItemType ::= "int"
 #[derive(Debug, PartialEq, Clone)]
 pub enum ItemType {
     Int,
-    Double,
+    Void,
 }
 
 /// Block ::= "{" {BlockItem} "}"
@@ -142,11 +165,14 @@ pub enum PrimaryExp {
     LVal(String),
 }
 
-/// UnaryExp ::= PrimaryExp | UnaryOp UnaryExp
+/// UnaryExp ::= PrimaryExp
+///             | UnaryOp UnaryExp
+///             | IDENT "(" [FuncRParams] ")"
 #[derive(Debug, PartialEq, Clone)]
 pub enum UnaryExp {
     PrimaryExp(Box<PrimaryExp>),
     UnaryExp((UnaryOp, Box<UnaryExp>)),
+    FuncItem((String, Option<FuncRParams>)),
 }
 
 /// AddExp ::= MulExp | AddExp AddOp MulExp
