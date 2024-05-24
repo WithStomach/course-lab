@@ -1,10 +1,6 @@
-void f(int a, int b)
-{
-    int c = a + b;
-}
-
 int main()
 {
-    f(1, 2);
-    return 0;
+    int a = 0;
+    int b = a && (a + 1);
+    return b;
 }

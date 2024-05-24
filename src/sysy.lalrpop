@@ -15,10 +15,15 @@ match {
 
 // 定义 CompUnit, 其返回值类型为 String
 // parser 在解析完成后的行为是返回 FuncDef 的值
-pub CompUnit: CompUnit = <comp_unit: (CompUnit)?> <func_def: FuncDef> => CompUnit{ 
+pub CompUnit: CompUnit = <comp_unit: (CompUnit)?> <global_item: GlobalItem> => CompUnit{ 
   comp_unit: Box::new(comp_unit),
-  func_def: func_def,
+  global_item: global_item,
 };
+
+pub GlobalItem: GlobalItem = {
+  <func_def: FuncDef> => GlobalItem::Func(func_def),
+  <decl: Decl> => GlobalItem::Decl(decl),
+}
 
 // 同上, 不解释
 FuncDef: FuncDef = {

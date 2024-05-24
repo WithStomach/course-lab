@@ -10,11 +10,17 @@ pub enum Variable {
     Func((String, ItemType)),
 }
 
-/// CompUnit ::= [CompUnit] FuncDef
+/// CompUnit ::= [CompUnit] GlobalItem
 #[derive(Debug, PartialEq, Clone)]
 pub struct CompUnit {
     pub comp_unit: Box<Option<CompUnit>>,
-    pub func_def: FuncDef,
+    pub global_item: GlobalItem,
+}
+
+#[derive(Debug, PartialEq, Clone)]
+pub enum GlobalItem {
+    Func(FuncDef),
+    Decl(Decl),
 }
 
 /// FuncDef ::= FuncType IDENT "(" [FuncFParams] ")" Block

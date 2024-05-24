@@ -15,7 +15,27 @@ impl CompUnit {
             enter_flag: -1,
             end_flag: -1,
         };
-        self.show(&mut compiler_info).0
+
+        let mut sys_func_names: Vec<(String, ItemType)> = Vec::new();
+        sys_func_names.push(("getint".to_string(), ItemType::Int));
+        sys_func_names.push(("getch".to_string(), ItemType::Int));
+        sys_func_names.push(("getarray".to_string(), ItemType::Int));
+        sys_func_names.push(("putint".to_string(), ItemType::Void));
+        sys_func_names.push(("putch".to_string(), ItemType::Void));
+        sys_func_names.push(("putarray".to_string(), ItemType::Void));
+        sys_func_names.push(("starttime".to_string(), ItemType::Void));
+        sys_func_names.push(("stoptime".to_string(), ItemType::Void));
+
+        for sys_func_name in sys_func_names {
+            let new_var = Variable::Func((format!("@{0}", sys_func_name.0), sys_func_name.1));
+            compiler_info
+                .vars_table
+                .insert(sys_func_name.0, (new_var, 0));
+        }
+
+        let mut s = "decl @getint(): i32\ndecl @getch(): i32\ndecl @getarray(*i32): i32\ndecl @putint(i32)\ndecl @putch(i32)\ndecl @putarray(i32, *i32)\ndecl @starttime()\ndecl @stoptime()\n\n".to_string();
+        s += &self.show(&mut compiler_info).0;
+        s
     }
 }
 
@@ -36,6 +56,7 @@ enum Res {
     Imm,
     Temp(i32),
     Ret,
+    Params(String),
 }
 
 trait Show {
@@ -50,14 +71,19 @@ impl Show for CompUnit {
             Some(sub_comp_unit) => s += &sub_comp_unit.show(info).0,
             None => {}
         }
-        let (func_str, func_res) = self.func_def.show(info);
-        s += &func_str;
-        let fun_var = Variable::Func((
-            format!("@{0}", self.func_def.id),
-            self.func_def.func_type.clone(),
-        ));
-        info.vars_table
-            .insert(self.func_def.id.clone(), (fun_var, 0));
+        match &self.global_item {
+            GlobalItem::Func(func_def) => {
+                let fun_var =
+                    Variable::Func((format!("@{0}", func_def.id), func_def.func_type.clone()));
+                info.vars_table.insert(func_def.id.clone(), (fun_var, 0));
+                let (func_str, func_res) = func_def.show(info);
+                s += &func_str;
+            }
+            GlobalItem::Decl(decl) => {
+                s += &decl.global_show(info);
+            }
+            _ => unreachable!(),
+        }
         (s, res)
     }
 }
@@ -128,7 +154,7 @@ impl FuncFParams {
 impl Show for FuncRParams {
     fn show(&self, info: &mut CompilerInfo) -> (String, Res) {
         let mut s = "".to_string();
-        let res = Res::Nothing;
+        let mut pre_s = "".to_string();
         let mut i = 0;
         for exp in &self.func_r_params {
             let (exp_str, exp_res) = exp.show(info);
@@ -141,6 +167,7 @@ impl Show for FuncRParams {
                     }
                 }
                 Res::Temp(temp) => {
+                    pre_s += &exp_str;
                     if i == 0 {
                         s += &format!("%{0}", temp);
                     } else {
@@ -151,7 +178,7 @@ impl Show for FuncRParams {
             }
             i += 1;
         }
-        (s, res)
+        (pre_s, Res::Params(s))
     }
 }
 
@@ -637,7 +664,14 @@ impl Show for UnaryExp {
                 let mut func_r_params_str = "".to_string();
                 match func_r_params {
                     Some(func_params) => {
-                        func_r_params_str += &func_params.show(info).0;
+                        let (param_str, param_res) = func_params.show(info);
+                        s += &param_str;
+                        match param_res {
+                            Res::Params(pstr) => {
+                                func_r_params_str += &pstr;
+                            }
+                            _ => unreachable!(),
+                        }
                     }
                     None => {}
                 }
@@ -838,25 +872,34 @@ impl Show for LOrExp {
                 res = sub_res;
             }
             LOrExp::LOrExp((lor_exp, land_exp)) => {
+                let true_flag = info.flag_id;
+                let false_flag = info.flag_id + 1;
+                let end_flag = info.flag_id + 2;
+                info.flag_id += 3;
                 let (lor_exp_str, lor_exp_res) = lor_exp.show(info);
                 let (land_exp_str, land_exp_res) = land_exp.show(info);
+                let ans_val = info.var_id;
+                s += &format!("\t@bool{0} = alloc i32\n", ans_val);
+                info.var_id += 1;
                 // 获取第一个操作数的字符串表示
                 let mut op1 = "".to_string();
                 match lor_exp_res {
-                    Res::Nothing => {}
                     Res::Imm => {
                         op1 = lor_exp_str;
+                        s += &format!("\tbr {0}, %flag{1}, %flag{2}\n", op1, true_flag, false_flag);
                     }
                     Res::Temp(id) => {
                         op1 = format!("%{}", id);
                         s += &lor_exp_str;
+                        s += &format!("\tbr %{0}, %flag{1}, %flag{2}\n", id, true_flag, false_flag);
                     }
-                    _ => {}
+                    _ => unreachable!(),
                 }
-                // 获取第一个操作数的字符串表示
+                s += &format!("%flag{0}:\n", false_flag);
+
+                // 获取第二个操作数的字符串表示
                 let mut op2 = "".to_string();
                 match land_exp_res {
-                    Res::Nothing => {}
                     Res::Imm => {
                         op2 = land_exp_str;
                     }
@@ -864,17 +907,21 @@ impl Show for LOrExp {
                         op2 = format!("%{}", id);
                         s += &land_exp_str;
                     }
-                    _ => {}
+                    _ => unreachable!(),
                 }
-                s += &format!("    %{0} = or {1}, {2}\n", info.temp_id, op1, op2);
-                s += &format!(
-                    "    %{0} = ne %{1}, {2}\n",
-                    info.temp_id + 1,
-                    info.temp_id,
-                    0
-                );
-                res = Res::Temp(info.temp_id + 1);
+                s += &format!("\t%{0} = or {1}, {2}\n", info.temp_id, op1, op2);
+                s += &format!("\t%{0} = ne %{1}, {2}\n", info.temp_id + 1, info.temp_id, 0);
+                s += &format!("\tstore %{0}, @bool{1}\n", info.temp_id + 1, ans_val);
                 info.temp_id += 2;
+
+                s += &format!("\tjump %flag{0}\n", end_flag);
+                s += &format!("%flag{0}:\n", true_flag);
+                s += &format!("\tstore 1, @bool{0}\n", ans_val);
+                s += &format!("\tjump %flag{0}\n", end_flag);
+                s += &format!("%flag{0}:\n", end_flag);
+                s += &format!("\t%{0} = load @bool{1}\n", info.temp_id, ans_val);
+                res = Res::Temp(info.temp_id);
+                info.temp_id += 1;
             }
         }
         (s, res)
@@ -892,25 +939,34 @@ impl Show for LAndExp {
                 res = sub_res;
             }
             LAndExp::LAndExp((land_exp, eq_exp)) => {
+                let true_flag = info.flag_id;
+                let false_flag = info.flag_id + 1;
+                let end_flag = info.flag_id + 2;
+                info.flag_id += 3;
                 let (land_exp_str, land_exp_res) = land_exp.show(info);
                 let (eq_exp_str, eq_exp_res) = eq_exp.show(info);
+                let ans_val = info.var_id;
+                s += &format!("\t@bool{0} = alloc i32\n", ans_val);
+                info.var_id += 1;
                 // 获取第一个操作数的字符串表示
                 let mut op1 = "".to_string();
                 match land_exp_res {
-                    Res::Nothing => {}
                     Res::Imm => {
                         op1 = land_exp_str;
+                        s += &format!("\tbr {0}, %flag{1}, %flag{2}\n", op1, false_flag, true_flag);
                     }
                     Res::Temp(id) => {
                         op1 = format!("%{}", id);
                         s += &land_exp_str;
+                        s += &format!("\tbr %{0}, %flag{1}, %flag{2}\n", id, false_flag, true_flag);
                     }
-                    _ => {}
+                    _ => unreachable!(),
                 }
-                // 获取第一个操作数的字符串表示
+                s += &format!("%flag{0}:\n", false_flag);
+
+                // 获取第二个操作数的字符串表示
                 let mut op2 = "".to_string();
                 match eq_exp_res {
-                    Res::Nothing => {}
                     Res::Imm => {
                         op2 = eq_exp_str;
                     }
@@ -918,18 +974,28 @@ impl Show for LAndExp {
                         op2 = format!("%{}", id);
                         s += &eq_exp_str;
                     }
-                    _ => {}
+                    _ => unreachable!(),
                 }
-                s += &format!("    %{0} = ne {1}, {2}\n", info.temp_id, op1, 0);
-                s += &format!("    %{0} = ne {1}, {2}\n", info.temp_id + 1, op2, 0);
+
+                s += &format!("\t%{0} = ne {1}, {2}\n", info.temp_id, op1, 0);
+                s += &format!("\t%{0} = ne {1}, {2}\n", info.temp_id + 1, op2, 0);
                 s += &format!(
-                    "    %{0} = and %{1}, %{2}\n",
+                    "\t%{0} = and %{1}, %{2}\n",
                     info.temp_id + 2,
                     info.temp_id + 1,
                     info.temp_id
                 );
-                res = Res::Temp(info.temp_id + 2);
+                s += &format!("\tstore %{0}, @bool{1}\n", info.temp_id + 2, ans_val);
                 info.temp_id += 3;
+
+                s += &format!("\tjump %flag{0}\n", end_flag);
+                s += &format!("%flag{0}:\n", true_flag);
+                s += &format!("\tstore 0, @bool{0}\n", ans_val);
+                s += &format!("\tjump %flag{0}\n", end_flag);
+                s += &format!("%flag{0}:\n", end_flag);
+                s += &format!("\t%{0} = load @bool{1}\n", info.temp_id, ans_val);
+                res = Res::Temp(info.temp_id);
+                info.temp_id += 1;
             }
         }
         (s, res)
@@ -1045,5 +1111,72 @@ impl Show for RelExp {
             }
         }
         (s, res)
+    }
+}
+
+trait GlobalShow {
+    fn global_show(&self, info: &mut CompilerInfo) -> String;
+}
+
+impl GlobalShow for Decl {
+    fn global_show(&self, info: &mut CompilerInfo) -> String {
+        let mut s = "".to_string();
+        match self {
+            Decl::ConstDecl(const_decl) => {
+                s += &const_decl.global_show(info);
+            }
+            Decl::VarDecl(var_decl) => {
+                s += &var_decl.global_show(info);
+            }
+        }
+        s
+    }
+}
+
+impl GlobalShow for ConstDecl {
+    fn global_show(&self, info: &mut CompilerInfo) -> String {
+        let s = "".to_string();
+        for const_def in &self.const_defs {
+            const_def.show(info);
+        }
+        s
+    }
+}
+
+impl GlobalShow for VarDecl {
+    fn global_show(&self, info: &mut CompilerInfo) -> String {
+        let mut s = "".to_string();
+        for var_def in &self.var_defs {
+            s += &var_def.global_show(info);
+        }
+        s
+    }
+}
+
+impl GlobalShow for VarDef {
+    fn global_show(&self, info: &mut CompilerInfo) -> String {
+        let mut s = "".to_string();
+        match self {
+            VarDef::Decl(decl) => {
+                s += &format!("global @{0} = alloc i32, zeroinit\n", decl);
+                info.vars_table
+                    .insert(decl.clone(), (Variable::INT(format!("@{0}", decl)), 0));
+            }
+            VarDef::Def((var_name, init_val)) => {
+                let mut calculate_info = info
+                    .clone()
+                    .vars_table
+                    .into_iter()
+                    .map(|(k, (v, _))| (k, v))
+                    .collect();
+                let init_str = init_val.exp.calculate(&mut calculate_info);
+                s += &format!("global @{0} = alloc i32, {1}\n", var_name, init_str);
+                info.vars_table.insert(
+                    var_name.clone(),
+                    (Variable::INT(format!("@{0}", var_name)), 0),
+                );
+            }
+        }
+        s
     }
 }
