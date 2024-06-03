@@ -29,16 +29,21 @@ impl GenerateAsm for koopa::ir::Program {
         value_reg_map: &mut HashMap<Value, i32>,
     ) -> (String, Res) {
         let mut s = "".to_string();
-        s += ".text\n";
+        // for &func in self.func_layout() {
+        //     let func_data = self.func(func);
+        //     s += ".text\n";
+        //     s += ".global ";
+        //     s += &func_data.name()[1..];
+        //     s += "\n";
+        // }
         for &func in self.func_layout() {
             let func_data = self.func(func);
-            s += ".global ";
-            s += &func_data.name()[1..];
-            s += "\n";
-        }
-        for &func in self.func_layout() {
-            let func_data = self.func(func);
-            s += &func_data.generate(None, register_id, value_reg_map).0;
+            if func_data.layout().entry_bb() == None {
+                continue;
+            }
+            s += &func_data
+                .generate(None, &mut register_id.clone(), &mut value_reg_map.clone())
+                .0;
         }
         (s, Res::Nothing)
     }
@@ -52,10 +57,16 @@ impl GenerateAsm for koopa::ir::FunctionData {
         value_reg_map: &mut HashMap<Value, i32>,
     ) -> (String, Res) {
         let mut pre_str = "".to_string();
+        pre_str += "\n\t.text\n";
+        pre_str += "\t.global ";
+        pre_str += &self.name()[1..];
+        pre_str += "\n";
         pre_str += &self.name()[1..];
         pre_str += ":\n";
         let mut s = "".to_string();
+        let mut flag = 0;
         for (&bb, node) in self.layout().bbs() {
+            flag += 1;
             let bb_data = self.dfg().bb(bb);
             match bb_data.name() {
                 Some(name) => {
@@ -83,11 +94,13 @@ impl GenerateAsm for koopa::ir::FunctionData {
         if stack_len % 16 != 0 {
             stack_len += 16 - stack_len % 16;
         }
-        pre_str += &format!("\tli t5, {0}\n\tadd sp, sp, t5\n", stack_len);
+        if flag != 0 {
+            pre_str += &format!("\tli t5, {0}\n\tadd sp, sp, t5\n", -stack_len);
+        }
         let end_str = format!(
             "{0}_end:\n\tli t5, {1}\n\tadd sp, sp, t5\n\tret\n",
             &self.name()[1..],
-            -stack_len
+            stack_len
         );
         let ans_s = pre_str + &s + &end_str;
         (ans_s, Res::Nothing)
