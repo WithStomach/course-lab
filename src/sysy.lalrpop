@@ -95,15 +95,29 @@ ConstDecl: ConstDecl = {
 }
 
 VarDef: VarDef = {
-  <ident: Ident> => VarDef::Decl(ident),
-  <ident: Ident> "=" <init_val: InitVal> => VarDef::Def((ident, init_val)),
+  <ident: Ident> <dims: ("[" <ConstExp> "]")*> => VarDef::Decl((ident, dims)),
+  <ident: Ident> <dims: ("[" <ConstExp> "]")*> "=" <init_val: InitVal> => VarDef::Def((ident, dims, init_val)),
 }
 
-ConstDef: ConstDef = <ident: Ident> "=" <const_init_val: ConstInitVal> => ConstDef{ <> };
+ConstDef: ConstDef = <ident: Ident> <dims: ("[" <ConstExp> "]")*> "=" <const_init_val: ConstInitVal> => ConstDef{ <> };
 
-ConstInitVal: ConstInitVal = <const_exp: ConstExp> => ConstInitVal{ <> };
+ConstInitVal: ConstInitVal = {
+  <const_exp: ConstExp> => ConstInitVal::Exp(<>),
+  "{" "}" => ConstInitVal::Array(Vec::new()),
+  "{" <init: ConstInitVal> <mut inits: ("," <ConstInitVal>)*> "}" => {
+    inits.insert(0, init);
+    ConstInitVal::Array(inits)
+  },
+}
 
-InitVal: InitVal = <exp: Exp> => InitVal{ <> };
+InitVal: InitVal = {
+  <exp: Exp> => InitVal::Exp(exp),
+  "{" "}" => InitVal::Array(Vec::new()),
+  "{" <init: InitVal> <mut inits: ("," <InitVal>)*> "}" => {
+    inits.insert(0, init);
+    InitVal::Array(inits)
+  },
+}
 
 Stmt: Stmt = {
   MatchedStmt => <>,
@@ -231,7 +245,7 @@ Number: i32 = <num: IntConst> => <>;
 // 关于尖括号到底代表什么, 请 RTFM
 Ident: String = r"[_a-zA-Z][_a-zA-Z0-9]*" => <>.to_string();
 
-LVal: String = <ident: Ident> => <>;
+LVal: LVal = <ident: Ident> <indices: ("[" <Exp> "]")*> => LVal { <> };
 
 // 对整数字面量的处理方式: 把匹配到的字符串按对应进制转换成数字
 IntConst: i32 = {

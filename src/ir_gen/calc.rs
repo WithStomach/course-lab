@@ -8,7 +8,10 @@ pub trait Calc {
 
 impl Calc for ConstInitVal {
     fn calculate(&self, vars_table: &mut HashMap<String, Variable>) -> i32 {
-        self.const_exp.calculate(vars_table)
+        match self {
+            ConstInitVal::Exp(const_exp) => const_exp.calculate(vars_table),
+            ConstInitVal::Array(array) => 0,
+        }
     }
 }
 
@@ -128,7 +131,7 @@ impl Calc for PrimaryExp {
         match self {
             PrimaryExp::Exp(exp) => exp.calculate(vars_table),
             PrimaryExp::Number(int) => *int,
-            PrimaryExp::LVal(var) => match vars_table.get(var) {
+            PrimaryExp::LVal(var) => match vars_table.get(&var.ident) {
                 Some(int) => match int {
                     Variable::ConstINT(const_int) => *const_int,
                     _ => unreachable!(),

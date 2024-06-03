@@ -1,0 +1,53 @@
+
+	.text
+	.global test
+test:
+	li t5, -32
+	add sp, sp, t5
+entry:
+	sw t5, 0(sp)
+	sw t5, 4(sp)
+	li t5, 0
+	sw t5, 0(sp)
+	lw t5, 0(sp)
+	sw t5, 8(sp)
+	li t5, 1
+	sw t5, 12(sp)
+	lw t5, 8(sp)
+	lw t6, 12(sp)
+	add t5, t5, t6
+	sw t5, 16(sp)
+	lw t5, 16(sp)
+	sw t5, 0(sp)
+	j test_end
+test_end:
+	li t5, 32
+	add sp, sp, t5
+	ret
+
+	.text
+	.global main
+main:
+	li t5, -32
+	add sp, sp, t5
+entry:
+	li t5, 0
+	sw t5, 0(sp)
+	lw t5, 0(sp)
+	sw t5, 4(sp)
+	li t5, 1
+	sw t5, 8(sp)
+	lw t5, 4(sp)
+	lw t6, 8(sp)
+	add t5, t5, t6
+	sw t5, 12(sp)
+	lw t5, 12(sp)
+	sw t5, 0(sp)
+	lw t5, 0(sp)
+	sw t5, 16(sp)
+	lw a0, 16(sp)
+	j main_end
+main_end:
+	li t5, 32
+	add sp, sp, t5
+	ret

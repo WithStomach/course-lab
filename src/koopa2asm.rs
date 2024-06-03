@@ -123,24 +123,28 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 res = Res::Imm;
             }
             ValueKind::Return(ret) => {
-                let ret_value = dfg_used.value(ret.value().unwrap());
-                match value_reg_map.get(&ret.value().unwrap()) {
-                    None => {
-                        let (ret_str, ret_res) =
-                            ret_value.generate(dfg, register_id, value_reg_map);
-                        match ret_res {
-                            Res::Nothing => {}
-                            Res::Imm => {
-                                s += &format!("\tli a0, {0}\n", ret_str);
+                match ret.value() {
+                    None => {}
+                    Some(ret_val) => {
+                        let ret_value = dfg_used.value(ret_val);
+                        match value_reg_map.get(&ret.value().unwrap()) {
+                            None => {
+                                let (ret_str, ret_res) =
+                                    ret_value.generate(dfg, register_id, value_reg_map);
+                                match ret_res {
+                                    Res::Imm => {
+                                        s += &format!("\tli a0, {0}\n", ret_str);
+                                    }
+                                    Res::Register(idx) => {
+                                        s += &format!("\tlw a0, {0}\n", get_register_name(&idx));
+                                    }
+                                    _ => unreachable!(),
+                                }
                             }
-                            Res::Register(idx) => {
+                            Some(idx) => {
                                 s += &format!("\tlw a0, {0}\n", get_register_name(&idx));
                             }
-                            _ => {}
                         }
-                    }
-                    Some(idx) => {
-                        s += &format!("\tlw a0, {0}\n", get_register_name(&idx));
                     }
                 }
                 res = Res::Return(0);
@@ -415,6 +419,9 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 }
                 _ => unreachable!(),
             },
+            ValueKind::FuncArgRef(arg_val) => {
+                println!("{:?}", arg_val)
+            }
             _ => panic!("2"),
         }
         (s, res)

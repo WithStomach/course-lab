@@ -8,6 +8,8 @@ pub enum Variable {
     ConstINT(i32),
     // 对于函数对象，保存其koopaIR中的函数名（e.g. @main)及其返回值类型
     Func((String, ItemType)),
+    // 对于数组（指针）对象，只保存其名字即可
+    Array(String),
 }
 
 /// CompUnit ::= [CompUnit] GlobalItem
@@ -97,26 +99,29 @@ pub struct ConstDecl {
 #[derive(Debug, PartialEq, Clone)]
 pub struct ConstDef {
     pub ident: String,
+    pub dims: Vec<ConstExp>,
     pub const_init_val: ConstInitVal,
 }
 
 /// VarDef ::= IDENT | IDENT "=" InitVal
 #[derive(Debug, PartialEq, Clone)]
 pub enum VarDef {
-    Decl(String),
-    Def((String, InitVal)),
+    Decl((String, Vec<ConstExp>)),
+    Def((String, Vec<ConstExp>, InitVal)),
 }
 
 /// InitVal ::= Exp
 #[derive(Debug, PartialEq, Clone)]
-pub struct InitVal {
-    pub exp: Exp,
+pub enum InitVal {
+    Exp(Exp),
+    Array(Vec<InitVal>),
 }
 
 /// ConstInitVal ::= ConstExp
 #[derive(Debug, PartialEq, Clone)]
-pub struct ConstInitVal {
-    pub const_exp: ConstExp,
+pub enum ConstInitVal {
+    Exp(ConstExp),
+    Array(Vec<ConstInitVal>),
 }
 
 /// "if" "(" cond ")" then_stmt ["else" self_stmt]
@@ -143,7 +148,7 @@ pub struct While {
 #[derive(Debug, PartialEq, Clone)]
 pub enum Stmt {
     Return(Option<Exp>),
-    Assign((String, Exp)),
+    Assign((LVal, Exp)),
     Exp(Option<Exp>),
     Block(Block),
     IF(Box<If>),
@@ -168,7 +173,7 @@ pub struct ConstExp {
 pub enum PrimaryExp {
     Exp(Box<Exp>),
     Number(i32),
-    LVal(String),
+    LVal(LVal),
 }
 
 /// UnaryExp ::= PrimaryExp
@@ -255,4 +260,11 @@ pub enum CmpOp {
     Grate,
     LessEq,
     GrateEq,
+}
+
+/// LVal ::= IDENT {"[" Exp "]"}
+#[derive(Debug, PartialEq, Clone)]
+pub struct LVal {
+    pub ident: String,
+    pub indices: Vec<Exp>,
 }
