@@ -7,9 +7,10 @@ pub enum Variable {
     // 对于int类型的常量，需要保存的信息只有它的值
     ConstINT(i32),
     // 对于函数对象，保存其koopaIR中的函数名（e.g. @main)及其返回值类型
-    Func((String, ItemType)),
-    // 对于数组（指针）对象，只保存其名字即可
+    Func((String, ItemType, Vec<bool>)),
+    // 对于数组（指针）对象，需要保存其名
     Array(String),
+    Ptr((String, ItemType)),
 }
 
 /// CompUnit ::= [CompUnit] GlobalItem
@@ -45,6 +46,7 @@ pub struct FuncFParams {
 pub struct FuncFParam {
     pub b_type: ItemType,
     pub id: String,
+    pub dims: Option<Vec<ConstExp>>,
 }
 
 /// FuncRParams ::= Exp {"," Exp}

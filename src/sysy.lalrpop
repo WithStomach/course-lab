@@ -42,7 +42,9 @@ FuncFParams: FuncFParams = {
 }
 
 FuncFParam: FuncFParam = {
-  <b_type: ItemType> <id: Ident> => FuncFParam{<>}
+  <b_type: ItemType> <id: Ident> <dims: ("[" "]" <("[" <ConstExp> "]")*>)?> => {
+    FuncFParam { <> }
+  },
 }
 
 FuncRParams: FuncRParams = {
