@@ -9,7 +9,11 @@ enum Res {
 }
 
 fn get_register_name(register_id: &i32) -> String {
-    format!("{0}(sp)", register_id * 4)
+    if *register_id >= 0 {
+        format!("{0}(sp)", register_id * 4)
+    } else {
+        format!("global_var_{0}", -register_id)
+    }
 }
 
 trait GenerateAsm {
@@ -18,6 +22,7 @@ trait GenerateAsm {
         dfg: Option<&DataFlowGraph>,
         register_id: &mut i32,
         value_reg_map: &mut HashMap<Value, i32>,
+        source_prog: &koopa::ir::Program,
     ) -> (String, Res);
 }
 
@@ -27,22 +32,34 @@ impl GenerateAsm for koopa::ir::Program {
         _dfg: Option<&DataFlowGraph>,
         register_id: &mut i32,
         value_reg_map: &mut HashMap<Value, i32>,
+        source_prog: &koopa::ir::Program,
     ) -> (String, Res) {
         let mut s = "".to_string();
-        // for &func in self.func_layout() {
-        //     let func_data = self.func(func);
-        //     s += ".text\n";
-        //     s += ".global ";
-        //     s += &func_data.name()[1..];
-        //     s += "\n";
-        // }
+        let mut global_id = 1;
+        for &value in self.inst_layout() {
+            let data = self.borrow_value(value);
+            s += &format!(
+                "\t.data\n\t.globl global_var_{0}\nglobal_var_{0}:\n",
+                global_id,
+            );
+            s += &data
+                .generate(None, register_id, value_reg_map, source_prog)
+                .0;
+            value_reg_map.insert(value, -global_id);
+            global_id += 1;
+        }
         for &func in self.func_layout() {
             let func_data = self.func(func);
             if func_data.layout().entry_bb() == None {
                 continue;
             }
             s += &func_data
-                .generate(None, &mut register_id.clone(), &mut value_reg_map.clone())
+                .generate(
+                    None,
+                    &mut register_id.clone(),
+                    &mut value_reg_map.clone(),
+                    source_prog,
+                )
                 .0;
         }
         (s, Res::Nothing)
@@ -55,6 +72,7 @@ impl GenerateAsm for koopa::ir::FunctionData {
         _dfg: Option<&DataFlowGraph>,
         register_id: &mut i32,
         value_reg_map: &mut HashMap<Value, i32>,
+        source_prog: &koopa::ir::Program,
     ) -> (String, Res) {
         let mut pre_str = "".to_string();
         pre_str += "\n\t.text\n";
@@ -78,7 +96,7 @@ impl GenerateAsm for koopa::ir::FunctionData {
             for &inst in node.insts().keys() {
                 let value_data = self.dfg().value(inst);
                 let (ret_str, ret_res) =
-                    value_data.generate(Some(self.dfg()), register_id, value_reg_map);
+                    value_data.generate(Some(self.dfg()), register_id, value_reg_map, source_prog);
                 s += &ret_str;
                 match ret_res {
                     Res::Nothing => {}
@@ -113,9 +131,9 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
         dfg: Option<&DataFlowGraph>,
         register_id: &mut i32,
         value_reg_map: &mut HashMap<Value, i32>,
+        source_prog: &koopa::ir::Program,
     ) -> (String, Res) {
         let mut s = "".to_string();
-        let dfg_used = dfg.unwrap();
         let mut res = Res::Nothing;
         match self.kind() {
             ValueKind::Integer(int) => {
@@ -123,14 +141,19 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 res = Res::Imm;
             }
             ValueKind::Return(ret) => {
+                let dfg_used = dfg.unwrap();
                 match ret.value() {
                     None => {}
                     Some(ret_val) => {
                         let ret_value = dfg_used.value(ret_val);
                         match value_reg_map.get(&ret.value().unwrap()) {
                             None => {
-                                let (ret_str, ret_res) =
-                                    ret_value.generate(dfg, register_id, value_reg_map);
+                                let (ret_str, ret_res) = ret_value.generate(
+                                    dfg,
+                                    register_id,
+                                    value_reg_map,
+                                    source_prog,
+                                );
                                 match ret_res {
                                     Res::Imm => {
                                         s += &format!("\tli a0, {0}\n", ret_str);
@@ -150,6 +173,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 res = Res::Return(0);
             }
             ValueKind::Binary(exp) => {
+                let dfg_used = dfg.unwrap();
                 let op = exp.op();
                 let lhs = dfg_used.value(exp.lhs());
                 let rhs = dfg_used.value(exp.rhs());
@@ -160,7 +184,8 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
 
                 match value_reg_map.get(&exp.lhs()) {
                     None => {
-                        let (lhs_str, lhs_res) = lhs.generate(dfg, register_id, value_reg_map);
+                        let (lhs_str, lhs_res) =
+                            lhs.generate(dfg, register_id, value_reg_map, source_prog);
                         match lhs_res {
                             Res::Nothing => {}
                             Res::Imm => {
@@ -186,7 +211,8 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 }
                 match value_reg_map.get(&exp.rhs()) {
                     None => {
-                        let (rhs_str, rhs_res) = rhs.generate(dfg, register_id, value_reg_map);
+                        let (rhs_str, rhs_res) =
+                            rhs.generate(dfg, register_id, value_reg_map, source_prog);
                         // 对右操作数，处理过程与左操作数相同
                         match rhs_res {
                             Res::Nothing => {}
@@ -341,11 +367,11 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 res = Res::Register(res_reg);
             }
             ValueKind::Alloc(alloc) => {
+                println!("{:?}", alloc);
                 res = Res::Register(*register_id);
                 *register_id += 1;
             }
             ValueKind::Load(load) => {
-                let src = dfg_used.value(load.src());
                 match value_reg_map.get(&load.src()) {
                     None => panic!("3"),
                     Some(i) => {
@@ -360,11 +386,12 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 *register_id += 1;
             }
             ValueKind::Store(store) => {
+                let dfg_used = dfg.unwrap();
                 let value = dfg_used.value(store.value());
                 match value_reg_map.get(&store.value()) {
                     None => {
                         let (value_str, value_res) =
-                            value.generate(dfg, register_id, value_reg_map);
+                            value.generate(dfg, register_id, value_reg_map, source_prog);
                         match value_res {
                             Res::Nothing => {}
                             Res::Imm => {
@@ -388,6 +415,7 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                 }
             }
             ValueKind::Jump(jump) => {
+                let dfg_used = dfg.unwrap();
                 let target_bb = dfg_used.bb(jump.target());
                 match target_bb.name() {
                     Some(name) => {
@@ -396,31 +424,45 @@ impl GenerateAsm for koopa::ir::entities::ValueData {
                     None => unreachable!(),
                 }
             }
-            ValueKind::Branch(branch) => match value_reg_map.get(&branch.cond()) {
-                Some(i) => {
-                    s += &format!("\tlw t5, {0}\n\tbnez t5, ", get_register_name(i));
-                    let true_bb = dfg_used.bb(branch.true_bb());
-                    let false_bb = dfg_used.bb(branch.false_bb());
-                    match true_bb.name() {
-                        Some(name) => {
-                            s += &name[1..];
-                            s += "\n";
+            ValueKind::Branch(branch) => {
+                let dfg_used = dfg.unwrap();
+                match value_reg_map.get(&branch.cond()) {
+                    Some(i) => {
+                        s += &format!("\tlw t5, {0}\n\tbnez t5, ", get_register_name(i));
+                        let true_bb = dfg_used.bb(branch.true_bb());
+                        let false_bb = dfg_used.bb(branch.false_bb());
+                        match true_bb.name() {
+                            Some(name) => {
+                                s += &name[1..];
+                                s += "\n";
+                            }
+                            _ => unreachable!(),
                         }
-                        _ => unreachable!(),
-                    }
-                    s += "\tj ";
-                    match false_bb.name() {
-                        Some(name) => {
-                            s += &name[1..];
-                            s += "\n";
+                        s += "\tj ";
+                        match false_bb.name() {
+                            Some(name) => {
+                                s += &name[1..];
+                                s += "\n";
+                            }
+                            _ => unreachable!(),
                         }
-                        _ => unreachable!(),
                     }
+                    _ => unreachable!(),
                 }
-                _ => unreachable!(),
-            },
+            }
             ValueKind::FuncArgRef(arg_val) => {
                 println!("{:?}", arg_val)
+            }
+            ValueKind::GlobalAlloc(globl_alloc) => {
+                let init_val = source_prog.borrow_value(globl_alloc.init());
+                s += "\t.word ";
+                s += &init_val
+                    .generate(dfg, register_id, value_reg_map, source_prog)
+                    .0;
+                s += "\n";
+            }
+            ValueKind::ZeroInit(zero_init) => {
+                s += "0";
             }
             _ => panic!("2"),
         }
@@ -432,6 +474,6 @@ pub fn koopa2asm(program: &Program) -> String {
     let mut register_recorder = 0;
     let mut value_reg_map: HashMap<Value, i32> = HashMap::new();
     program
-        .generate(None, &mut register_recorder, &mut value_reg_map)
+        .generate(None, &mut register_recorder, &mut value_reg_map, program)
         .0
 }
